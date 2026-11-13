@@ -42,7 +42,7 @@ jobs:
 
       - name: Verify required files exist
         run: |
-          REQUIRED="manifest.json popup.html popup.js content.js background.js styles.css icon16.png icon48.png icon128.png"
+          REQUIRED="manifest.json popup.html popup.js shared.js content.js background.js styles.css icon16.png icon48.png icon128.png"
           for f in $REQUIRED; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
@@ -59,6 +59,7 @@ jobs:
             manifest.json \
             popup.html \
             popup.js \
+            shared.js \
             content.js \
             background.js \
             styles.css \
@@ -74,11 +75,11 @@ jobs:
           ## RSearch v${{ steps.version.outputs.VERSION }}
 
           ### Features
-          - Keywords mode with 363+ error patterns
+          - Always-on auto-highlight (optional all-sites access, per-site pause)
+          - Keywords mode with 450+ error patterns and smart word matching
           - Regex mode with full pattern support
-          - Severity-based color coding (8 levels)
-          - Top 3 density areas with click navigation
-          - Auto-search on page load and tab switch
+          - Severity-based color coding (critical, error, problem, warning)
+          - Match navigation, Top 3 hotspots, copy error lines
           - CSV preset system (3 slots, 500 keywords each)
 
           ### Install

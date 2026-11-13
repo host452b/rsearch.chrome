@@ -7,64 +7,51 @@ A powerful Chrome extension for advanced text searching with regex, multi-keywor
 
 ## Features
 
+### Always-On Auto-Highlight (default ON)
+
+- Every page you open is highlighted automatically with the active preset
+- One-time "Allow on all sites" grant (optional permission — the extension asks only when you want auto-highlight; nothing is ever sent anywhere)
+- Pause it per site ("Auto on this site") or turn it off globally with the **Auto** switch
+- Live updates: streaming CI logs, lazy-loaded and single-page-app content get highlighted as they appear
+- Match count on the toolbar badge, colored by the worst severity found
+- Background tabs wait until you look at them, so opening many tabs stays fast
+
 ### Two Search Modes
 
-**1. Keywords Mode** (Default)
-- Pre-configured error keywords (363+ common error patterns)
-- CSV-based preset system with customizable keywords
-- 3 preset slots for different use cases
-- Severity-based color coding (magenta → red → orange → yellow → green)
-- Case-insensitive matching
+**1. Keywords Mode** (default)
+- 450+ pre-configured error keywords (Python, C/C++, CUDA, NCCL, TensorRT, PyTorch, vLLM, Kubernetes, Go, Rust, Java, Node, kernel/GPU…)
+- Leave the input empty to search with the active preset, or type ad-hoc keywords (`oom, xid, nccl`)
+- **Smart match**: keywords must start at a word or camelCase boundary, and keywords of 5 letters or fewer must be whole words — `error` still finds `TypeError` and `CUDA_ERROR`, but `fault` no longer lights up `default`, `oom` no longer hits `zoom`, `fatal` no longer hits `fatality`
+- CSV-based preset system with 3 slots, up to 500 keywords each
 
 **2. Regex Mode**
-- Full regular expression support
-- Advanced pattern matching
-- Case-sensitive/insensitive options
-- Global search support
+- Full JavaScript regular expressions, ignore-case and find-all options
 
-### Smart Highlighting
+### Severity Colors
 
-Color palette by severity level:
-| Level | Color | Usage |
-|-------|-------|-------|
-| 1 | Magenta | Most severe errors |
-| 2 | Pink-Red | Critical errors |
-| 3 | Red | Errors |
-| 4 | Deep Orange | Warnings |
-| 5 | Orange | Alerts |
-| 6 | Yellow | Notices |
-| 7 | Lime | Info |
-| 8 | Green | Least severe |
+Every keyword has a severity, so the color tells you how bad a line is:
 
-### Top 3 Density Areas
+| Level | Color | Examples |
+|-------|-------|----------|
+| Critical | Red `#DC2626` | segfault, SIGSEGV, OOM, panic, Xid, heap-use-after-free, CrashLoopBackOff |
+| Error | Light red `#EF4444` | error, exception, failed, Traceback, undefined reference, Caused by |
+| Problem | Orange `#F97316` | timeout, timed out, invalid, not found, mismatch, unsupported |
+| Warning | Amber `#F59E0B` | warning, WARN, deprecated, retrying |
+| Notice / other | Yellow → cyan | expected, required, your own custom keywords |
 
-- Sliding window algorithm detects high-density error regions
-- Shows Top 3 areas with most keyword matches
-- Click to navigate directly to error hotspots
-- Temporary highlight on target element
+### Find the Real Problem Fast
 
-### Auto-Search Feature
+- Severity chips in the popup (e.g. `12 Critical · 300 Error`) — click one to jump to the next match of that severity
+- Previous / next match navigation (`‹ ›`, or `j`/`k` / arrow keys in the popup), scrolling nested log panes too
+- Top 3 hotspots: the densest, most severe, non-overlapping regions of the page, with a preview of the worst line
+- Scrollbar markers on the right edge, colored by severity — hover for the line, click to jump
+- **Copy error lines**: copies the deduplicated critical/error/problem lines for a bug report or chat
 
-- Toggle switch for automatic searching
-- Auto-executes search on new page loads
-- Auto-executes when switching browser tabs
-- Remembers switch state across sessions
+### Safe and Fast on Any Page
 
-### Preset Management
-
-- 3 customizable preset slots
-- CSV format: `rank,keyword`
-- Up to 500 keywords per preset
-- Import/export via CSV editor
-- Default preset with 363+ error keywords
-
-### Additional Features
-
-- Real-time search progress with ETA
-- Match count display
-- Clean and intuitive interface
-- No data collection
-- Works on all websites
+- Uses the CSS Custom Highlight API: the page DOM is never modified, so React/Vue apps, code editors and contenteditable fields keep working
+- Skips text areas, inputs and editable regions
+- Time-sliced, cancellable search: a 50,000-line log is searched in ~0.2 s without freezing the page (v3.4.0 took ~2 minutes and froze the tab)
 
 ## Installation
 
@@ -87,37 +74,37 @@ Color palette by severity level:
 
 ### Basic Usage
 
-1. Click the RSearch icon in your Chrome toolbar
-2. Toggle the switch ON (green) to enable auto-search
-3. Or manually click "Search" to find matches
-4. View Top 3 density areas and click to navigate
-5. Click "Clear" to remove highlights
+1. Install, open RSearch once and click **Allow** to auto-highlight every page you open
+2. Open any log page — errors are highlighted automatically and counted on the badge
+3. Click the RSearch icon to see severity counts, hotspots and step through matches
+4. Type keywords or switch to Regex for a one-off search; **Clear** removes highlights on this page
 
 ### Preset Management
 
-1. Select a preset from the dropdown
-2. Click "Edit" to modify keywords
+1. Select a preset from the dropdown (the page re-highlights immediately)
+2. Click **Edit** to rename it or change its keywords
 3. Edit in CSV format: `rank,keyword`
-4. Click "Save Changes"
-5. Click "Apply" to use the preset
+4. Click **Save**; **Reset to default** restores the built-in list
 
-### Auto-Search Mode
+### Auto-Highlight
 
-1. Turn ON the switch (green)
-2. New pages and tab switches will auto-search
-3. Turn OFF (red) to disable and clear highlights
+- The **Auto** switch in the header is ON by default
+- Without the "all sites" permission, auto-highlight runs whenever you open the popup
+- "Auto on this site" in the popup footer pauses it for the current site only
 
 ## Default Error Keywords
 
-The default preset includes 363+ error keywords covering:
-- System signals (SIGSEGV, SIGABRT, etc.)
-- Common errors (error, fail, exception, etc.)
-- CUDA/GPU errors
-- Python/PyTorch errors
-- ONNX/ONNXRuntime errors
-- Compiler errors (gcc, clang, nvcc)
-- Memory errors
-- And more...
+The default preset includes 450+ error keywords covering:
+- System signals and crashes (SIGSEGV, SIGABRT, core dumped, panicked, OOMKilled…)
+- Common errors (error, fail, exception, Caused by, exit code, timed out…)
+- CUDA / cuBLAS / cuDNN / NCCL / TensorRT / NVIDIA driver (Xid, NVRM, fallen off the bus)
+- Python, C/C++ compiler and linker, Go, Rust, Java, Node/npm
+- ONNX / ONNXRuntime / vLLM / SGLang / PyTorch errors
+- Kubernetes and containers (CrashLoopBackOff, ImagePullBackOff, Evicted…)
+- Memory safety and sanitizers (heap-use-after-free, data race, double free…)
+- HTTP and auth failures (forbidden, unauthorized, bad gateway, rate limit…)
+
+Upgrading from 3.4.0: if you never edited the default preset it is upgraded automatically; otherwise use **Reset to default** to get the new keywords.
 
 ## Privacy
 
@@ -138,9 +125,10 @@ rsearch/
 ├── manifest.json       # extension configuration
 ├── popup.html          # extension popup UI
 ├── popup.js            # popup logic
-├── content.js          # page content manipulation
-├── background.js       # auto-search service worker
-├── styles.css          # highlight styles
+├── shared.js           # keywords, severity, matcher, settings (shared by all contexts)
+├── content.js          # search + highlight (CSS Custom Highlight API)
+├── background.js       # auto-highlight registration, badge, migrations
+├── styles.css          # highlight colors + scrollbar markers
 ├── icon.svg            # SVG icon source
 ├── icon*.png           # PNG icons
 ├── README.md           # this file

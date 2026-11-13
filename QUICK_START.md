@@ -112,7 +112,7 @@ Advanced search tool with regex, multi-keyword support, and error log analysis. 
 RSearch - Advanced Text Search & Error Analysis
 
 Features:
-• Keywords Mode with 363+ pre-configured error patterns
+• Keywords Mode with 450+ pre-configured error patterns
 • Regex Mode for advanced pattern matching  
 • Severity-based color coding (8 colors)
 • Top 3 density areas for error hotspots

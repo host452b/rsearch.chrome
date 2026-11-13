@@ -2,14 +2,18 @@
   "manifest_version": 3,
   "name": "RSearch - Error Log Search & Highlighter",
   "version": "3.4.0",
-  "description": "Regex & keyword search with 363+ error patterns and auto-highlight.",
+  "description": "Error log highlighter: 450+ error patterns, severity colors, regex search and always-on auto-highlight.",
   "author": "clemente0731",
+  "minimum_chrome_version": "105",
   "homepage_url": "https://github.com/clemente0731/rsearch",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "tabs"
+  ],
+  "optional_host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"

@@ -1,7 +1,7 @@
 {
   "name": "rsearch-extension",
   "version": "3.4.0",
-  "description": "Advanced search with regex, 363+ error keywords, auto-highlight for Chrome",
+  "description": "Error log highlighter for Chrome: 450+ error keywords, severity colors, regex search, always-on auto-highlight",
   "private": true,
   "type": "module",
   "scripts": {

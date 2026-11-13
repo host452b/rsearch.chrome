@@ -309,7 +309,7 @@ function screenshot1() {
   ctx.fillText('RSearch', w / 2, 48);
   ctx.fillStyle = C.mutedFg;
   ctx.font = '16px -apple-system, sans-serif';
-  ctx.fillText('363+ Error Keywords  ·  Auto-Highlight  ·  Severity Colors', w / 2, 78);
+  ctx.fillText('450+ Error Keywords  ·  Auto-Highlight  ·  Severity Colors', w / 2, 78);
 
   drawWindow(ctx, 50, 110, 800, 630);
   drawLogs(ctx, 50, 146, 800, 594, 30, LOG_SETS.errors);
@@ -482,7 +482,7 @@ function screenshot3() {
   ctx.stroke();
   ctx.fillStyle = C.info;
   ctx.font = 'bold 13px -apple-system, sans-serif';
-  ctx.fillText('Preset: Default (363 keywords)', bx + 16, by + 26);
+  ctx.fillText('Preset: Default (459 keywords)', bx + 16, by + 26);
   ctx.fillStyle = C.fgSoft;
   ctx.font = '11px -apple-system, sans-serif';
   ctx.fillText('3 customizable slots  ·  CSV import/export', bx + 16, by + 48);
@@ -522,7 +522,7 @@ function smallPromo() {
   ctx.textAlign = 'center';
   ctx.fillText('Error Log Search & Highlighter', w / 2, 100);
 
-  const pills = ['363+ Patterns', 'Auto-Highlight', 'Top 3 Hotspots'];
+  const pills = ['450+ Patterns', 'Auto-Highlight', 'Top 3 Hotspots'];
   for (let i = 0; i < 3; i++) {
     const px = 40 + i * 126;
     ctx.fillStyle = C.surface;
@@ -572,7 +572,7 @@ function marquee() {
   ctx.font = '18px -apple-system, sans-serif';
   ctx.fillText('Advanced Error Log Search & Highlighter', 80, 180);
 
-  const pills = ['363+ Patterns', 'Auto-Search', 'Top 3 Hotspots', '8 Severity Colors', 'Regex + Keywords'];
+  const pills = ['450+ Patterns', 'Auto-Search', 'Top 3 Hotspots', '8 Severity Colors', 'Regex + Keywords'];
   for (let i = 0; i < pills.length; i++) {
     const px = 80 + i * 135;
     ctx.fillStyle = C.surface;

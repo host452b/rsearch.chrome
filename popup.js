@@ -1,1259 +1,614 @@
-// get dom elements
-const patternInput = document.getElementById('pattern');
-const caseInsensitiveCheckbox = document.getElementById('caseInsensitive');
-const globalSearchCheckbox = document.getElementById('globalSearch');
-const searchBtn = document.getElementById('searchBtn');
-const clearBtn = document.getElementById('clearBtn');
-const closeBtn = document.getElementById('closeBtn');
-const toggleSwitch = document.getElementById('toggleSwitch');
-const statusDiv = document.getElementById('status');
-const regexModeRadio = document.getElementById('regexMode');
-const keywordModeRadio = document.getElementById('keywordMode');
-const patternLabel = document.getElementById('patternLabel');
-const globalLabel = document.getElementById('globalLabel');
+// RSearch popup.
+const Core = window.RSearchCore;
+const $ = id => document.getElementById(id);
 
-// preset elements
-const presetSelect = document.getElementById('presetSelect');
-const presetNameInput = document.getElementById('presetNameInput');
-const presetInfoSpan = document.getElementById('presetInfo');
-const applyPresetBtn = document.getElementById('applyPresetBtn');
-const editCsvBtn = document.getElementById('editCsvBtn');
-const csvEditorContainer = document.getElementById('csvEditorContainer');
-const csvTextarea = document.getElementById('csvTextarea');
-const saveCsvBtn = document.getElementById('saveCsvBtn');
-const resetCsvBtn = document.getElementById('resetCsvBtn');
+const ui = {
+  autoToggle: $('autoToggle'),
+  accessBanner: $('accessBanner'),
+  grantBtn: $('grantBtn'),
+  pageNotice: $('pageNotice'),
+  keywordMode: $('keywordMode'),
+  regexMode: $('regexMode'),
+  presetRow: $('presetRow'),
+  presetSelect: $('presetSelect'),
+  editBtn: $('editBtn'),
+  editor: $('editor'),
+  presetName: $('presetName'),
+  csvText: $('csvText'),
+  saveCsvBtn: $('saveCsvBtn'),
+  resetCsvBtn: $('resetCsvBtn'),
+  pattern: $('pattern'),
+  ignoreCase: $('ignoreCase'),
+  smartMatch: $('smartMatch'),
+  smartLabel: $('smartLabel'),
+  findAll: $('findAll'),
+  findAllLabel: $('findAllLabel'),
+  searchBtn: $('searchBtn'),
+  clearBtn: $('clearBtn'),
+  status: $('status'),
+  results: $('results'),
+  count: $('count'),
+  meta: $('meta'),
+  chips: $('chips'),
+  navPos: $('navPos'),
+  prevBtn: $('prevBtn'),
+  nextBtn: $('nextBtn'),
+  hotspotsBlock: $('hotspotsBlock'),
+  hotspots: $('hotspots'),
+  copyBtn: $('copyBtn'),
+  footer: $('footer'),
+  siteName: $('siteName'),
+  siteToggle: $('siteToggle')
+};
 
-// hotspots elements
-const hotspotsContainer = document.getElementById('hotspotsContainer');
-const hotspotsList = document.getElementById('hotspotsList');
+const PAGE_SCRIPTS = ['shared.js', 'content.js'];
 
-// track injected tabs to avoid re-injection
-const injectedTabs = new Set();
+let settings = null;
+let tab = null;
+let host = '';
+let pageState = 'ok';     // 'ok' | 'restricted' | 'file-blocked' | 'none'
+let hasAccess = false;
+let busy = false;
+let statusTimer = null;
+let searchToken = 0;
 
-// listen for progress updates from content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'searchProgress') {
-    const percent = message.percent;
-    const matches = message.matches;
-    const eta = message.estimatedSeconds;
-    
-    let statusText = 'Searching... ' + percent + '%';
-    statusText += ' | ' + matches + ' match(es)';
-    
-    if (eta > 0 && eta < 999) {
-      statusText += ' | ~' + eta + 's left';
+// ============================================================
+// STATUS
+// ============================================================
+
+function showStatus(message, type) {
+  clearTimeout(statusTimer);
+  ui.status.textContent = message;
+  ui.status.className = type || '';
+  ui.status.hidden = false;
+  if (type === 'success') {
+    statusTimer = setTimeout(() => { ui.status.hidden = true; }, 4000);
+  }
+}
+
+function hideStatus() {
+  clearTimeout(statusTimer);
+  ui.status.hidden = true;
+}
+
+function setBusy(value) {
+  busy = value;
+  ui.searchBtn.disabled = value;
+  ui.searchBtn.textContent = value ? 'Searching…' : 'Search';
+}
+
+function fmt(n) {
+  return Number(n || 0).toLocaleString('en-US');
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+
+async function saveSettings(partial) {
+  await chrome.storage.local.set(partial);
+}
+
+function activePreset() {
+  return settings.presets[settings.activePresetIndex];
+}
+
+function siteDisabled() {
+  return settings.disabledHosts.includes(host);
+}
+
+function renderPresetSelect() {
+  ui.presetSelect.textContent = '';
+  settings.presets.forEach((preset, index) => {
+    const option = document.createElement('option');
+    option.value = String(index);
+    const count = Core.parseCsvToKeywords(preset.csv).length;
+    option.textContent = preset.name + ' · ' + count + (count === 1 ? ' keyword' : ' keywords');
+    ui.presetSelect.appendChild(option);
+  });
+  ui.presetSelect.value = String(settings.activePresetIndex);
+}
+
+function renderPlaceholder() {
+  if (ui.regexMode.checked) {
+    ui.pattern.placeholder = 'Regular expression, e.g. \\b(ERROR|FATAL)\\b';
+  } else {
+    ui.pattern.placeholder = 'Leave empty for preset, or type: oom, xid';
+  }
+}
+
+function renderModeUI() {
+  const regex = ui.regexMode.checked;
+  ui.presetRow.hidden = regex;
+  ui.editor.hidden = regex || ui.editor.hidden;
+  ui.smartLabel.hidden = regex;
+  ui.findAllLabel.hidden = !regex;
+  ui.editBtn.textContent = ui.editor.hidden ? 'Edit' : 'Done';
+  renderPlaceholder();
+}
+
+function renderAccessUI() {
+  ui.autoToggle.checked = settings.autoEnabled;
+  ui.accessBanner.hidden = !(settings.autoEnabled && !hasAccess);
+
+  const showFooter = pageState === 'ok' && settings.autoEnabled && !!host;
+  ui.footer.hidden = !showFooter;
+  if (showFooter) {
+    ui.siteName.textContent = host === 'file://' ? 'Local files' : host;
+    ui.siteName.title = host;
+    ui.siteToggle.checked = !siteDisabled();
+  }
+}
+
+function renderPageNotice() {
+  ui.pageNotice.textContent = '';
+  if (pageState === 'ok') {
+    ui.pageNotice.hidden = true;
+    return;
+  }
+  ui.pageNotice.hidden = false;
+  if (pageState === 'file-blocked') {
+    ui.pageNotice.append('To search local files, turn on "Allow access to file URLs" for RSearch.');
+    const button = document.createElement('button');
+    button.className = 'btn-secondary';
+    button.textContent = 'Open extension settings';
+    button.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
+    });
+    ui.pageNotice.append(document.createElement('br'), button);
+  } else {
+    ui.pageNotice.textContent = 'RSearch can\'t run on this page. Chrome blocks extensions on its own pages and the Web Store.';
+  }
+  ui.searchBtn.disabled = true;
+  ui.clearBtn.disabled = true;
+}
+
+// ============================================================
+// RESULTS
+// ============================================================
+
+const CHIP_GROUPS = [
+  { level: 0, label: 'Critical' },
+  { level: 1, label: 'Error' },
+  { level: 2, label: 'Problem' },
+  { level: 3, label: 'Warning' },
+  { level: 'other', label: 'Other' }
+];
+
+function renderResults(summary) {
+  if (!summary || !summary.active) {
+    ui.results.hidden = true;
+    return;
+  }
+  ui.results.hidden = false;
+  ui.count.textContent = fmt(summary.count);
+
+  const meta = [];
+  if (summary.label) meta.push(summary.mode === 'keywords' && summary.source === 'auto' ? 'Preset: ' + summary.label : summary.label);
+  if (summary.truncated) meta.push('first ' + fmt(summary.maxHighlights) + ' highlighted');
+  const hidden = summary.highlighted - summary.visibleCount;
+  if (hidden > 0) meta.push(fmt(hidden) + ' hidden on page');
+  if (summary.running) meta.push('scanning…');
+  ui.meta.textContent = meta.join(' · ');
+
+  ui.navPos.textContent = (summary.cursor >= 0 ? fmt(summary.cursor + 1) : '–') + ' / ' + fmt(summary.visibleCount);
+  ui.prevBtn.disabled = summary.visibleCount === 0;
+  ui.nextBtn.disabled = summary.visibleCount === 0;
+  ui.copyBtn.disabled = summary.visibleCount === 0;
+
+  // severity chips: click jumps to the next match of that severity
+  ui.chips.textContent = '';
+  const levels = summary.levels || [];
+  for (const group of CHIP_GROUPS) {
+    const count = group.level === 'other'
+      ? levels.slice(4).reduce((a, b) => a + b, 0)
+      : (levels[group.level] || 0);
+    if (count === 0) continue;
+    const chip = document.createElement('button');
+    chip.className = 'chip';
+    chip.title = 'Jump to next ' + group.label.toLowerCase() + ' match';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = Core.LEVELS[group.level === 'other' ? 4 : group.level].bg;
+    const num = document.createElement('b');
+    num.textContent = fmt(count);
+    chip.append(dot, num, document.createTextNode(group.label));
+    chip.addEventListener('click', () => navigate(1, group.level));
+    ui.chips.appendChild(chip);
+  }
+
+  ui.hotspots.textContent = '';
+  const hotspots = summary.hotspots || [];
+  ui.hotspotsBlock.hidden = hotspots.length === 0;
+  for (const spot of hotspots) {
+    const item = document.createElement('button');
+    item.className = 'hotspot';
+    item.title = 'Jump to this area';
+
+    const top = document.createElement('div');
+    top.className = 'hotspot-top';
+    const rank = document.createElement('span');
+    rank.className = 'hotspot-rank';
+    rank.textContent = '#' + spot.rank;
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = Core.LEVELS[spot.level].bg;
+    const info = document.createElement('span');
+    info.textContent = spot.position + ' down · ' + fmt(spot.count) + (spot.count === 1 ? ' match' : ' matches');
+    top.append(rank, dot, info);
+
+    const preview = document.createElement('div');
+    preview.className = 'hotspot-preview';
+    preview.textContent = spot.preview || '…';
+
+    item.append(top, preview);
+    item.addEventListener('click', () => sendToTab({ action: 'scrollToHotspot', areaIndex: spot.areaIndex }).then(renderResults).catch(() => {}));
+    ui.hotspots.appendChild(item);
+  }
+}
+
+// ============================================================
+// TAB MESSAGING
+// ============================================================
+
+function sendToTab(message) {
+  return chrome.tabs.sendMessage(tab.id, message);
+}
+
+async function contentState() {
+  try {
+    return await sendToTab({ action: 'getState' });
+  } catch (e) {
+    return null; // no content script yet
+  }
+}
+
+async function ensureContent() {
+  const alive = await sendToTab({ action: 'ping' }).then(r => !!(r && r.ok)).catch(() => false);
+  if (alive) return;
+  await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: ['styles.css'] });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: PAGE_SCRIPTS });
+}
+
+function friendlyError(error) {
+  const message = (error && error.message) || String(error);
+  if (/Cannot access|chrome:\/\/|cannot be scripted|extensions gallery/i.test(message)) {
+    return 'RSearch can\'t run on this page.';
+  }
+  if (/file:\/\//i.test(message)) {
+    return 'Allow access to file URLs for RSearch to search local files.';
+  }
+  if (/Receiving end does not exist|Could not establish connection/i.test(message)) {
+    return 'The page is still loading. Try again in a moment.';
+  }
+  return message;
+}
+
+// ============================================================
+// SEARCH
+// ============================================================
+
+function buildRequest() {
+  const text = ui.pattern.value.trim();
+  if (ui.regexMode.checked) {
+    if (!text) return { error: 'Enter a regular expression.' };
+    const flags = (ui.ignoreCase.checked ? 'i' : '') + (ui.findAll.checked ? 'g' : '');
+    try {
+      new RegExp(text, flags);
+    } catch (e) {
+      return { error: 'Invalid regex: ' + e.message };
     }
-    
-    statusDiv.textContent = statusText;
-    statusDiv.className = 'progress';
+    return { source: 'manual', request: { mode: 'regex', pattern: text, flags, label: 'Regex' } };
+  }
+
+  const options = { ignoreCase: ui.ignoreCase.checked, smartMatch: ui.smartMatch.checked };
+  if (text) {
+    const keywords = Core.parseKeywordInput(text);
+    return {
+      source: 'manual',
+      request: Object.assign({ mode: 'keywords', keywords, label: keywords.length + ' custom keyword' + (keywords.length === 1 ? '' : 's') }, options)
+    };
+  }
+
+  const keywords = Core.getActiveKeywords(settings);
+  if (keywords.length === 0) {
+    return { error: 'Preset "' + activePreset().name + '" is empty. Click Edit to add keywords.' };
+  }
+  // preset searches follow the auto settings (preset / option changes re-run them)
+  return { source: 'auto', request: Object.assign({ mode: 'keywords', keywords, label: activePreset().name }, options) };
+}
+
+async function runSearch() {
+  if (pageState !== 'ok') return;
+  const built = buildRequest();
+  if (built.error) {
+    showStatus(built.error, 'error');
+    return;
+  }
+
+  const token = ++searchToken;
+  setBusy(true);
+  showStatus('Searching…', 'progress');
+  try {
+    await ensureContent();
+    const response = await sendToTab({ action: 'search', request: built.request, source: built.source });
+    if (token !== searchToken) return;
+    if (!response || response.aborted) {
+      // replaced by a newer search; its results arrive via resultsUpdated
+      return;
+    }
+    if (response.success) {
+      renderResults(response);
+      if (response.count === 0) {
+        showStatus('No matches on this page.', 'info');
+      } else {
+        showStatus('Found ' + fmt(response.count) + (response.count === 1 ? ' match' : ' matches'), 'success');
+      }
+    } else {
+      renderResults(null);
+      showStatus(response.error || 'Search failed.', 'error');
+    }
+  } catch (error) {
+    if (token === searchToken) showStatus(friendlyError(error), 'error');
+  } finally {
+    if (token === searchToken) setBusy(false);
+  }
+}
+
+async function clearPage(silent) {
+  if (pageState !== 'ok') return;
+  searchToken++;
+  setBusy(false);
+  try {
+    const state = await contentState();
+    if (state) await sendToTab({ action: 'clear' });
+    renderResults(null);
+    if (!silent) {
+      showStatus(settings.autoEnabled
+        ? 'Cleared. Search or reload the page to highlight again.'
+        : 'Highlights cleared.', 'success');
+    }
+  } catch (error) {
+    showStatus(friendlyError(error), 'error');
+  }
+}
+
+async function navigate(direction, level) {
+  try {
+    const response = await sendToTab({ action: 'navigate', direction, level: level === undefined ? null : level });
+    renderResults(response);
+    if (response && !response.success && level !== null && level !== undefined) {
+      showStatus('No visible matches of that severity.', 'info');
+    }
+  } catch (error) {
+    showStatus(friendlyError(error), 'error');
+  }
+}
+
+async function copyErrorLines() {
+  try {
+    const response = await sendToTab({ action: 'collectLines', maxLevel: 2, limit: 500 });
+    const lines = (response && response.lines) || [];
+    if (lines.length === 0) {
+      showStatus('Nothing to copy.', 'info');
+      return;
+    }
+    await navigator.clipboard.writeText(lines.join('\n'));
+    showStatus('Copied ' + fmt(lines.length) + (lines.length === 1 ? ' line' : ' lines') + ' to the clipboard.', 'success');
+  } catch (error) {
+    showStatus('Copy failed: ' + friendlyError(error), 'error');
+  }
+}
+
+// a preset change should refresh what the page shows (custom keyword
+// searches typed into the input are left alone)
+function rerunIfPresetSearch() {
+  if (pageState !== 'ok' || ui.regexMode.checked || ui.pattern.value.trim()) return;
+  runSearch();
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+
+ui.autoToggle.addEventListener('change', async () => {
+  const on = ui.autoToggle.checked;
+  settings.autoEnabled = on;
+  // start the write before the permission prompt: the prompt can close the popup
+  const saving = saveSettings({ [Core.STORAGE.autoEnabled]: on });
+  let accessRequest = null;
+  if (on && !hasAccess) {
+    // must be called synchronously inside the click gesture
+    accessRequest = chrome.permissions.request(Core.HOST_PERMISSION).catch(() => false);
+  }
+  await saving;
+  if (accessRequest) hasAccess = await accessRequest;
+  renderAccessUI();
+
+  if (on) {
+    showStatus(hasAccess ? 'Auto-highlight is on for every page.' : 'Auto-highlight is on. Allow access to all sites to run it without opening RSearch.', hasAccess ? 'success' : 'info');
+    if (!siteDisabled()) runSearch();
+  } else {
+    await clearPage(true);
+    showStatus('Auto-highlight is off. Use Search to highlight on demand.', 'info');
+  }
+});
+
+ui.grantBtn.addEventListener('click', async () => {
+  hasAccess = await chrome.permissions.request(Core.HOST_PERMISSION).catch(() => false);
+  renderAccessUI();
+  showStatus(hasAccess ? 'Done. Every page you open will be highlighted.' : 'Access not granted. Auto-highlight runs when you open RSearch.', hasAccess ? 'success' : 'info');
+});
+
+ui.siteToggle.addEventListener('change', async () => {
+  const enabled = ui.siteToggle.checked;
+  const set = new Set(settings.disabledHosts);
+  if (enabled) set.delete(host);
+  else set.add(host);
+  settings.disabledHosts = Array.from(set);
+  await saveSettings({ [Core.STORAGE.disabledHosts]: settings.disabledHosts });
+  if (enabled) {
+    runSearch();
+  } else {
+    await clearPage(true);
+    showStatus('Auto-highlight paused on ' + host + '. Search still works here.', 'info');
+  }
+});
+
+ui.keywordMode.addEventListener('change', renderModeUI);
+ui.regexMode.addEventListener('change', () => {
+  renderModeUI();
+  ui.pattern.focus();
+});
+
+ui.presetSelect.addEventListener('change', async () => {
+  settings.activePresetIndex = parseInt(ui.presetSelect.value, 10);
+  await saveSettings({ [Core.STORAGE.activePreset]: settings.activePresetIndex });
+  if (!ui.editor.hidden) loadEditor();
+  renderPlaceholder();
+  rerunIfPresetSearch();
+});
+
+function loadEditor() {
+  const preset = activePreset();
+  ui.presetName.value = preset.name;
+  ui.csvText.value = preset.csv;
+}
+
+ui.editBtn.addEventListener('click', () => {
+  const opening = ui.editor.hidden;
+  if (opening) loadEditor();
+  ui.editor.hidden = !opening;
+  ui.editBtn.textContent = opening ? 'Done' : 'Edit';
+  if (opening) ui.csvText.focus();
+});
+
+ui.saveCsvBtn.addEventListener('click', async () => {
+  const csv = ui.csvText.value;
+  const keywords = Core.parseCsvToKeywords(csv);
+  if (keywords.length === 0 && csv.trim() !== Core.EMPTY_CSV) {
+    showStatus('No keywords found. Use one "rank,keyword" per line.', 'error');
+    return;
+  }
+  const lines = csv.trim().split('\n').filter(l => /^\s*\d+\s*,/.test(l)).length;
+  const name = ui.presetName.value.trim() || activePreset().name;
+  settings.presets[settings.activePresetIndex] = { name, csv };
+  await saveSettings({ [Core.STORAGE.presets]: settings.presets });
+  renderPresetSelect();
+  renderPlaceholder();
+  const capped = lines > Core.MAX_KEYWORDS ? ' (only the first ' + Core.MAX_KEYWORDS + ' by rank are used)' : '';
+  showStatus('Saved ' + keywords.length + ' keywords' + capped + '.', capped ? 'info' : 'success');
+  rerunIfPresetSearch();
+});
+
+ui.resetCsvBtn.addEventListener('click', async () => {
+  const defaults = Core.getDefaultPresets();
+  const fallback = defaults[settings.activePresetIndex] || { name: 'Custom', csv: Core.EMPTY_CSV };
+  settings.presets[settings.activePresetIndex] = Object.assign({}, fallback);
+  await saveSettings({ [Core.STORAGE.presets]: settings.presets });
+  loadEditor();
+  renderPresetSelect();
+  renderPlaceholder();
+  showStatus('Restored the default keywords.', 'success');
+  rerunIfPresetSearch();
+});
+
+async function onOptionChange() {
+  settings.options = { ignoreCase: ui.ignoreCase.checked, smartMatch: ui.smartMatch.checked };
+  await saveSettings({ [Core.STORAGE.options]: settings.options });
+  if (!ui.results.hidden) runSearch();
+}
+ui.ignoreCase.addEventListener('change', onOptionChange);
+ui.smartMatch.addEventListener('change', onOptionChange);
+ui.findAll.addEventListener('change', () => { if (!ui.results.hidden && ui.regexMode.checked) runSearch(); });
+
+ui.searchBtn.addEventListener('click', runSearch);
+ui.clearBtn.addEventListener('click', () => clearPage(false));
+ui.prevBtn.addEventListener('click', () => navigate(-1));
+ui.nextBtn.addEventListener('click', () => navigate(1));
+ui.copyBtn.addEventListener('click', copyErrorLines);
+
+ui.pattern.addEventListener('keydown', event => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    runSearch();
+  }
+});
+
+// j/k or arrow keys step through matches when not typing
+document.addEventListener('keydown', event => {
+  const target = event.target;
+  const typing = target && (target.tagName === 'INPUT' && target.type === 'text' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+  if (typing || ui.results.hidden || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (event.key === 'ArrowDown' || event.key === 'j') {
+    event.preventDefault();
+    navigate(1);
+  } else if (event.key === 'ArrowUp' || event.key === 'k') {
+    event.preventDefault();
+    navigate(-1);
+  }
+});
+
+// progress + live updates from the content script of this tab
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (!tab || !sender.tab || sender.tab.id !== tab.id) return false;
+  if (message.action === 'searchProgress') {
+    let text = 'Searching… ' + message.percent + '% · ' + fmt(message.matches) + ' matches';
+    if (message.estimatedSeconds > 0 && message.estimatedSeconds < 999) text += ' · ~' + message.estimatedSeconds + 's left';
+    showStatus(text, 'progress');
+  } else if (message.action === 'resultsUpdated') {
+    renderResults(message.summary);
+    if (!busy && message.summary && message.summary.active && !message.summary.running && ui.status.className === 'progress') {
+      hideStatus();
+    }
   }
   return false;
 });
 
 // ============================================================
-// CONSTANTS
+// INIT
 // ============================================================
 
-const MAX_KEYWORDS = 500;
-const STORAGE_KEY = 'rsearch_presets_v2';
-
-// ============================================================
-// DEFAULT PRESET 1 - ERROR KEYWORDS
-// ============================================================
-// rank | keyword                              | category
-// higher rank = more specific, matched first to avoid substring overlap
-// add new keywords at the end, rank auto-increments
-
-const DEFAULT_PRESET_1_KEYWORDS = [
-  // --- basic error terms (1-29) ---
-  /*   1 */ 'error',
-  /*   2 */ 'fail',
-  /*   3 */ 'failed',
-  /*   4 */ 'failure',
-  /*   5 */ 'fatal',
-  /*   6 */ 'exception',
-  /*   7 */ 'crash',
-  /*   8 */ 'abort',
-  /*   9 */ 'aborted',
-  /*  10 */ 'panic',
-  /*  11 */ 'warning',
-  /*  12 */ 'critical',
-  /*  13 */ 'severe',
-  /*  14 */ 'timeout',
-  /*  15 */ 'invalid',
-  /*  16 */ 'denied',
-  /*  17 */ 'refused',
-  /*  18 */ 'rejected',
-  /*  19 */ 'missing',
-  /*  20 */ 'corrupt',
-  /*  21 */ 'corrupted',
-  /*  22 */ 'overflow',
-  /*  23 */ 'terminated',
-  /*  24 */ 'unhandled',
-  /*  25 */ 'unexpected',
-  /*  26 */ 'illegal',
-  /*  27 */ 'unreachable',
-
-  // --- unix signals (28-42) ---
-  /*  28 */ 'sigsegv',
-  /*  29 */ 'sigabrt',
-  /*  30 */ 'sigfpe',
-  /*  31 */ 'sigbus',
-  /*  32 */ 'sigill',
-  /*  33 */ 'sigtrap',
-  /*  34 */ 'sigkill',
-  /*  35 */ 'sigsys',
-  /*  36 */ 'sigterm',
-  /*  37 */ 'sigpipe',
-  /*  38 */ 'sigxcpu',
-  /*  39 */ 'sigxfsz',
-
-  // --- process states (40-44) ---
-  /*  40 */ 'killed',
-  /*  41 */ 'traceback',
-  /*  42 */ 'segfault',
-  /*  43 */ 'coredump',
-  /*  44 */ 'backtrace',
-
-  // --- errno codes (45-62) ---
-  /*  45 */ 'enomem',
-  /*  46 */ 'einval',
-  /*  47 */ 'bad address',
-  /*  48 */ 'eacces',
-  /*  49 */ 'enoent',
-  /*  50 */ 'eperm',
-  /*  51 */ 'ebadf',
-  /*  52 */ 'enospc',
-  /*  53 */ 'emfile',
-  /*  54 */ 'enfile',
-  /*  55 */ 'ebusy',
-  /*  56 */ 'eexist',
-  /*  57 */ 'epipe',
-  /*  58 */ 'eagain',
-  /*  59 */ 'etimedout',
-  /*  60 */ 'econnreset',
-  /*  61 */ 'econnrefused',
-  /*  62 */ 'enotconn',
-
-  // --- python exceptions (63-101) ---
-  /*  63 */ 'typeerror',
-  /*  64 */ 'valueerror',
-  /*  65 */ 'keyerror',
-  /*  66 */ 'indexerror',
-  /*  67 */ 'nameerror',
-  /*  68 */ 'syntaxerror',
-  /*  69 */ 'runtimeerror',
-  /*  70 */ 'memoryerror',
-  /*  71 */ 'oserror',
-  /*  72 */ 'ioerror',
-  /*  73 */ 'assertionerror',
-  /*  74 */ 'importerror',
-  /*  75 */ 'attributeerror',
-  /*  76 */ 'overflowerror',
-  /*  77 */ 'recursionerror',
-  /*  78 */ 'permissionerror',
-  /*  79 */ 'timeouterror',
-  /*  80 */ 'indentationerror',
-  /*  81 */ 'taberror',
-  /*  82 */ 'systemerror',
-  /*  83 */ 'zerodivisionerror',
-  /*  84 */ 'filenotfounderror',
-  /*  85 */ 'modulenotfounderror',
-  /*  86 */ 'notimplementederror',
-  /*  87 */ 'unboundlocalerror',
-  /*  88 */ 'unicodedecodeerror',
-  /*  89 */ 'unicodeencodeerror',
-  /*  90 */ 'brokenpipeerror',
-  /*  91 */ 'connectionerror',
-  /*  92 */ 'connectionrefusederror',
-  /*  93 */ 'connectionabortederror',
-  /*  94 */ 'blockingioerror',
-  /*  95 */ 'childprocesserror',
-  /*  96 */ 'interruptederror',
-  /*  97 */ 'floatingpointerror',
-  /*  98 */ 'stopiteration',
-  /*  99 */ 'generatorexit',
-  /* 100 */ 'systemexit',
-  /* 101 */ 'keyboardinterrupt',
-
-  // --- cuda errors (102-120) ---
-  /* 102 */ 'cudaerror',
-  /* 103 */ 'cuda_error',
-  /* 104 */ 'bad_alloc',
-  /* 105 */ 'oom-killer',
-  /* 106 */ 'cudaerrormemoryallocation',
-  /* 107 */ 'cudaerrorinvaliddevice',
-  /* 108 */ 'cudaerrorinvalidvalue',
-  /* 109 */ 'cudaerrorlaunchfailure',
-  /* 110 */ 'cudaerrorlaunchtimeout',
-  /* 111 */ 'cudaerrornodevice',
-  /* 112 */ 'cudaerrorassert',
-  /* 113 */ 'cudaerrorunknown',
-  /* 114 */ 'cudaerrorinvalidptx',
-  /* 115 */ 'cudaerrorillegaladdress',
-  /* 116 */ 'cudaerrorinsufficientdriver',
-  /* 117 */ 'cudaerrorinvalidconfiguration',
-  /* 118 */ 'cudaerrorlaunchoutofresources',
-  /* 119 */ 'cudaerrorinvaliddevicefunction',
-
-  // --- cublas/cudnn status (120-126) ---
-  /* 120 */ 'cublas_status_execution_failed',
-  /* 121 */ 'cublas_status_alloc_failed',
-  /* 122 */ 'cublas_status_invalid_value',
-  /* 123 */ 'cudnn_status_bad_param',
-  /* 124 */ 'cudnn_status_execution_failed',
-  /* 125 */ 'cudnn_status_internal_error',
-  /* 126 */ 'cudnn_status_not_supported',
-
-  // --- tensorrt severity (127-129) ---
-  /* 127 */ 'severity::kerror',
-  /* 128 */ 'severity::kinternal_error',
-  /* 129 */ 'kinvalid',
-
-  // --- nvidia driver (130-131) ---
-  /* 130 */ 'xid',
-  /* 131 */ 'nvrm',
-
-  // --- sanitizers (132-141) ---
-  /* 132 */ 'asan',
-  /* 133 */ 'lsan',
-  /* 134 */ 'tsan',
-  /* 135 */ 'ubsan',
-  /* 136 */ 'msan',
-  /* 137 */ 'addresssanitizer',
-  /* 138 */ 'leaksanitizer',
-  /* 139 */ 'threadsanitizer',
-  /* 140 */ 'memorysanitizer',
-  /* 141 */ 'undefinedbehaviorsanitizer',
-
-  // --- c++ exceptions (142-148) ---
-  /* 142 */ 'std::runtime_error',
-  /* 143 */ 'std::logic_error',
-  /* 144 */ 'std::out_of_range',
-  /* 145 */ 'std::invalid_argument',
-  /* 146 */ 'std::bad_cast',
-  /* 147 */ 'std::bad_typeid',
-  /* 148 */ 'thrust::system_error',
-
-  // --- linker errors (149-151) ---
-  /* 149 */ 'lnk2001',
-  /* 150 */ 'lnk2019',
-  /* 151 */ 'lnk1120',
-
-  // --- general error states (152-185) ---
-  /* 152 */ 'oops',
-  /* 153 */ 'leaked',
-  /* 154 */ 'leaking',
-  /* 155 */ 'crashing',
-  /* 156 */ 'crashed',
-  /* 157 */ 'failing',
-  /* 158 */ 'aborting',
-  /* 159 */ 'dead',
-  /* 160 */ 'hung',
-  /* 161 */ 'stuck',
-  /* 162 */ 'frozen',
-  /* 163 */ 'blocked',
-  /* 164 */ 'unresponsive',
-  /* 165 */ 'halted',
-  /* 166 */ 'broken',
-  /* 167 */ 'segv',
-  /* 168 */ 'abrt',
-  /* 169 */ 'assertion',
-  /* 170 */ 'thrown',
-  /* 171 */ 'raised',
-  /* 172 */ 'leak',
-  /* 173 */ 'faults',
-  /* 174 */ 'errors',
-  /* 175 */ 'failures',
-  /* 176 */ 'exceptions',
-  /* 177 */ 'crashes',
-  /* 178 */ 'aborts',
-  /* 179 */ 'panics',
-  /* 180 */ 'underflow',
-  /* 181 */ 'misaligned',
-  /* 182 */ 'deadlock',
-  /* 183 */ 'deadlocked',
-  /* 184 */ 'violation',
-  /* 185 */ 'starvation',
-  /* 186 */ 'contention',
-  /* 187 */ 'unavailable',
-
-  // --- additional python exceptions (188-199) ---
-  /* 188 */ 'syntaxwarning',
-  /* 189 */ 'buffererror',
-  /* 190 */ 'fileexistserror',
-  /* 191 */ 'isadirectoryerror',
-  /* 192 */ 'notadirectoryerror',
-  /* 193 */ 'arithmeticerror',
-  /* 194 */ 'stopasynciteration',
-  /* 195 */ 'unicodetranslateerror',
-  /* 196 */ 'unicodeerror',
-  /* 197 */ 'connectionreseterror',
-  /* 198 */ 'lookuperror',
-  /* 199 */ 'referenceerror',
-
-  // --- c/c++ syntax & parse errors (200-206) ---
-  /* 200 */ 'syntax error',
-  /* 201 */ 'parse error',
-  /* 202 */ 'stray',
-  /* 203 */ 'lvalue required',
-  /* 204 */ 'incompatible',
-  /* 205 */ 'type mismatch',
-  /* 206 */ 'invalid conversion',
-
-  // --- c/c++ identifier errors (207-214) ---
-  /* 207 */ 'undeclared',
-  /* 208 */ 'implicit declaration',
-  /* 209 */ 'redefinition',
-  /* 210 */ 'multiple definition',
-  /* 211 */ 'unused variable',
-  /* 212 */ 'unused parameter',
-  /* 213 */ 'uninitialized',
-  /* 214 */ 'unresolved',
-
-  // --- c/c++ preprocessor errors (215-218) ---
-  /* 215 */ 'unterminated',
-  /* 216 */ '#error',
-  /* 217 */ '#warning',
-
-  // --- c/c++ linker errors (218-227) ---
-  /* 218 */ 'no such file',
-  /* 219 */ 'fatal error',
-  /* 220 */ 'undefined reference',
-  /* 221 */ 'undefined symbol',
-  /* 222 */ 'library not found',
-  /* 223 */ 'linker command failed',
-  /* 224 */ 'relocation',
-  /* 225 */ 'ld returned',
-  /* 226 */ 'collect2',
-  /* 227 */ 'cannot find',
-
-  // --- c/c++ memory & pointer errors (228-239) ---
-  /* 228 */ 'dereferencing',
-  /* 229 */ 'null pointer',
-  /* 230 */ 'dangling pointer',
-  /* 231 */ 'double free',
-  /* 232 */ 'use after free',
-  /* 233 */ 'heap-buffer-overflow',
-  /* 234 */ 'stack-buffer-overflow',
-  /* 235 */ 'memory leak',
-  /* 236 */ 'out of bounds',
-  /* 237 */ 'array subscript',
-  /* 238 */ 'buffer overflow',
-  /* 239 */ 'stack smashing',
-
-  // --- c/c++ class & template errors (240-249) ---
-  /* 240 */ 'no member named',
-  /* 241 */ 'vtable',
-  /* 242 */ 'abstract class',
-  /* 243 */ 'pure virtual',
-  /* 244 */ 'template argument',
-  /* 245 */ 'No module named',
-  /* 246 */ 'no viable',
-  /* 247 */ 'private member',
-  /* 248 */ 'protected member',
-  /* 249 */ 'incomplete type',
-
-  // --- c/c++ constant & expression errors (250-253) ---
-  /* 250 */ 'non-constant',
-  /* 251 */ 'narrowing conversion',
-
-  // --- c/c++ compiler warnings (252-257) ---
-  /* 252 */ 'fall-through',
-  /* 253 */ 'stack protector',
-  /* 254 */ 'deprecated',
-  /* 255 */ 'discards qualifiers',
-  /* 256 */ 'Wformat',
-  /* 257 */ 'Werror',
-
-  // --- runtime crash signals (258-263) ---
-  /* 258 */ 'Segmentation fault',
-  /* 259 */ 'Bus error',
-  /* 260 */ 'Floating point exception',
-  /* 261 */ 'Illegal instruction',
-  /* 262 */ 'core dumped',
-  /* 263 */ 'Aborted',
-
-  // --- pytorch onnx export errors (264-270) ---
-  /* 264 */ 'ONNXCheckerError',
-  /* 265 */ 'TorchONNXOperatorSupportError',
-  /* 266 */ 'UnsupportedOperatorError',
-  /* 267 */ 'TorchScriptSyntaxError',
-  /* 268 */ 'GraphConstructionError',
-  /* 269 */ 'export failed',
-
-  // --- onnx model errors (270-277) ---
-  /* 270 */ 'InvalidProtobufError',
-  /* 271 */ 'MissingAttributeError',
-  /* 272 */ 'InvalidGraphError',
-  /* 273 */ 'TypeInferenceError',
-  /* 274 */ 'InvalidModelError',
-  /* 275 */ 'onnx.checker',
-  /* 276 */ 'ValidationError',
-  /* 277 */ 'shape inference',
-
-  // --- onnxruntime errors (278-286) ---
-  /* 278 */ 'OrtException',
-  /* 279 */ 'ExecutionProviderError',
-  /* 280 */ 'NoRegisteredKernelForOperator',
-  /* 281 */ 'SessionCreationError',
-  /* 282 */ 'InvalidInputShapeError',
-  /* 283 */ 'EPInitializationFailure',
-  /* 284 */ 'RuntimeShapeInferenceError',
-
-  // --- vllm errors (285-292) ---
-  /* 285 */ 'PagedAttentionError',
-  /* 286 */ 'BlockAllocatorError',
-  /* 287 */ 'WorkerError',
-  /* 288 */ 'ModelLoaderError',
-  /* 289 */ 'ParallelConfigError',
-  /* 290 */ 'SchedulerError',
-  /* 291 */ 'KVCacheLimitError',
-  /* 292 */ 'UnsupportedModelArchitectureError',
-
-  // --- sglang errors (293-298) ---
-  /* 293 */ 'RadixAttentionError',
-  /* 294 */ 'EngineInitializationError',
-  /* 295 */ 'RadixTreeError',
-  /* 296 */ 'BackendNotSupportedError',
-  /* 297 */ 'PrefillError',
-  /* 298 */ 'RequestAbortedError',
-
-  // --- ml framework common errors (299-302) ---
-  /* 299 */ 'OperatorNotFoundError',
-  /* 300 */ 'VersionMismatchError',
-  /* 301 */ 'IncompatibleDTypeError',
-  /* 302 */ 'DeprecatedOperatorWarning',
-
-  // --- cuda & device errors (303-308) ---
-  /* 303 */ 'RuntimeError: CUDA',
-  /* 304 */ 'CUDARuntimeError',
-  /* 305 */ 'DeviceMismatchError',
-  /* 306 */ 'InvalidDeviceError',
-  /* 307 */ 'TensorRTCompatibilityError',
-
-  // --- memory & oom errors (308-318) ---
-  /* 308 */ 'OutOfMemoryError',
-  /* 309 */ 'cuda out of memory',
-  /* 310 */ 'MemoryAllocationError',
-  /* 311 */ 'DoubleFreeError',
-  /* 312 */ 'MemoryLeakWarning',
-  /* 313 */ 'OOM',
-  /* 314 */ 'out of memory',
-  /* 315 */ 'memory allocation',
-
-  // --- environment & installation errors (316-323) ---
-  /* 316 */ 'DlOpenError',
-  /* 317 */ 'cannot open shared object',
-  /* 318 */ 'CompilerError',
-  /* 319 */ 'nvcc not found',
-  /* 320 */ 'BrokenInstallationError',
-  /* 321 */ 'UnsupportedPythonVersionError',
-
-  // --- distributed & nccl errors (322-329) ---
-  /* 322 */ 'NCCLError',
-  /* 323 */ 'DistributedBackendError',
-  /* 324 */ 'PeerAccessError',
-  /* 325 */ 'CommunicationAbortedError',
-
-  // --- tensor shape errors (326-332) ---
-  /* 326 */ 'ShapeMismatchError',
-  /* 327 */ 'InvalidBatchSizeError',
-  /* 328 */ 'EmptyTensorError',
-  /* 329 */ 'DimensionOutOfBoundsError',
-  /* 330 */ 'mismatch',
-  /* 331 */ 'incompatible',
-
-  // --- model weight errors (332-340) ---
-  /* 332 */ 'SafetensorsError',
-  /* 333 */ 'CheckpointCorruptedError',
-  /* 334 */ 'InvalidTensorNameError',
-  /* 335 */ 'SerializationError',
-  /* 336 */ 'missing keys',
-  /* 337 */ 'unexpected keys',
-
-  // --- incompatibility errors (338-360) ---
-  /* 338 */ 'not compatible',
-  /* 339 */ 'not supported',
-  /* 340 */ 'unsupported',
-  /* 341 */ 'version conflict',
-  /* 342 */ 'conflict',
-  /* 343 */ 'conflicting',
-  /* 344 */ 'ABI mismatch',
-  /* 345 */ 'binary incompatible',
-  /* 346 */ 'API mismatch',
-  /* 347 */ 'protocol mismatch',
-  /* 348 */ 'does not match',
-  /* 349 */ 'expected',
-  /* 350 */ 'requires',
-  /* 351 */ 'required',
-  /* 352 */ 'breaking change',
-  /* 353 */ 'backward incompatible',
-  /* 354 */ 'cannot be used',
-  /* 355 */ 'incompatible version',
-  /* 356 */ 'incompatible type',
-  /* 357 */ 'architecture mismatch',
-  /* 358 */ 'platform mismatch',
-  /* 359 */ 'dependency conflict',
-  /* 360 */ 'package conflict',
-
-  // --- specific patterns (361+, add new keywords here) ---
-  /* 361 */ '[E]',
-  /* 362 */ 'error:',
-  /* 363 */ 'Could not',
-];
-
-// generate csv from keywords array
-function generatePresetCsv(keywords) {
-  const lines = ['rank,key_word'];
-  keywords.forEach((kw, i) => {
-    lines.push((i + 1) + ',' + kw);
-  });
-  return lines.join('\n');
+async function detectPageState() {
+  if (!tab || !tab.url) return 'none';
+  if (Core.isRestrictedUrl(tab.url)) return 'restricted';
+  if (tab.url.startsWith('file:')) {
+    const allowed = await chrome.extension.isAllowedFileSchemeAccess().catch(() => true);
+    if (!allowed) return 'file-blocked';
+  }
+  return 'ok';
 }
-
-const DEFAULT_PRESET_1_CSV = generatePresetCsv(DEFAULT_PRESET_1_KEYWORDS);
-
-const DEFAULT_PRESET_2_CSV = `rank,key_word
-1,error
-2,warning
-3,info
-4,debug
-5,trace
-6,fatal
-7,critical
-8,notice
-9,alert
-10,emerg`;
-
-const DEFAULT_PRESET_3_CSV = `rank,key_word`;
-
-// default presets structure
-function getDefaultPresets() {
-  return [
-    { name: 'Error Keywords', csv: DEFAULT_PRESET_1_CSV },
-    { name: 'Common Errors', csv: DEFAULT_PRESET_2_CSV },
-    { name: 'Custom', csv: DEFAULT_PRESET_3_CSV }
-  ];
-}
-
-// ============================================================
-// PRESET STORAGE
-// ============================================================
-
-let currentPresetIndex = 0;
-let presets = null;
-
-// load presets from storage
-async function loadPresets() {
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    if (result[STORAGE_KEY]) {
-      presets = result[STORAGE_KEY];
-      // ensure we have 3 presets
-      while (presets.length < 3) {
-        presets.push({ name: 'Custom ' + (presets.length + 1), csv: DEFAULT_PRESET_3_CSV });
-      }
-    } else {
-      presets = getDefaultPresets();
-      // save default presets for background script
-      await chrome.storage.local.set({ [STORAGE_KEY]: presets });
-    }
-  } catch (e) {
-    console.error('Failed to load presets:', e);
-    presets = getDefaultPresets();
-    // save default presets for background script
-    await chrome.storage.local.set({ [STORAGE_KEY]: presets });
-  }
-  return presets;
-}
-
-// save presets to storage
-async function savePresets() {
-  try {
-    await chrome.storage.local.set({ [STORAGE_KEY]: presets });
-    return true;
-  } catch (e) {
-    console.error('Failed to save presets:', e);
-    return false;
-  }
-}
-
-// ============================================================
-// CSV PARSING
-// ============================================================
-
-// parse csv and extract keywords sorted by rank
-function parseCsvToKeywords(csvContent) {
-  const lines = csvContent.trim().split('\n');
-  
-  if (lines.length < 1) {
-    return [];
-  }
-  
-  // check if first line is header
-  const firstLine = lines[0].trim().toLowerCase();
-  const hasHeader = firstLine.includes('rank') && firstLine.includes('key');
-  const dataLines = hasHeader ? lines.slice(1) : lines;
-  
-  const entries = [];
-  
-  for (const line of dataLines) {
-    const trimmedLine = line.trim();
-    if (!trimmedLine) {
-      continue;
-    }
-    
-    // parse csv line: rank,key_word
-    const firstCommaIndex = trimmedLine.indexOf(',');
-    if (firstCommaIndex === -1) {
-      continue;
-    }
-    
-    const rankStr = trimmedLine.substring(0, firstCommaIndex).trim();
-    const keyword = trimmedLine.substring(firstCommaIndex + 1).trim();
-    
-    const rank = parseInt(rankStr, 10);
-    
-    if (isNaN(rank)) {
-      continue;
-    }
-    
-    if (!keyword) {
-      continue;
-    }
-    
-    entries.push({ rank, keyword });
-  }
-  
-  // sort by rank ascending
-  entries.sort((a, b) => a.rank - b.rank);
-  
-  // limit to MAX_KEYWORDS
-  const limited = entries.slice(0, MAX_KEYWORDS);
-  
-  return limited.map(e => e.keyword);
-}
-
-// build regex pattern from keywords
-function buildRegexFromKeywords(keywords) {
-  if (keywords.length === 0) {
-    return '';
-  }
-  
-  // escape special regex characters
-  const escapedKeywords = keywords.map(kw => {
-    return kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  });
-  
-  return '(' + escapedKeywords.join('|') + ')';
-}
-
-// ============================================================
-// UI UPDATE
-// ============================================================
-
-// update preset selector options
-function updatePresetSelector() {
-  presetSelect.innerHTML = '';
-  
-  for (let i = 0; i < presets.length; i++) {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = presets[i].name;
-    presetSelect.appendChild(opt);
-  }
-  
-  presetSelect.value = currentPresetIndex;
-}
-
-// update preset info display
-function updatePresetInfo() {
-  const preset = presets[currentPresetIndex];
-  const keywords = parseCsvToKeywords(preset.csv);
-  presetInfoSpan.textContent = keywords.length + '/' + MAX_KEYWORDS + ' keywords';
-  presetNameInput.value = preset.name;
-}
-
-// update csv textarea
-function updateCsvTextarea() {
-  const preset = presets[currentPresetIndex];
-  csvTextarea.value = preset.csv;
-}
-
-// ============================================================
-// PRESET HELPERS
-// ============================================================
-
-// apply current preset to input field
-function applyPresetToInput() {
-  if (!presets || !presets[currentPresetIndex]) {
-    return;
-  }
-  
-  const preset = presets[currentPresetIndex];
-  const keywords = parseCsvToKeywords(preset.csv);
-  
-  if (keywords.length === 0) {
-    return;
-  }
-  
-  const isRegexMode = regexModeRadio.checked;
-  
-  if (isRegexMode) {
-    const regexPattern = buildRegexFromKeywords(keywords);
-    caseInsensitiveCheckbox.checked = true;
-    globalSearchCheckbox.checked = true;
-    patternInput.value = regexPattern;
-  } else {
-    caseInsensitiveCheckbox.checked = true;
-    patternInput.value = keywords.join(', ');
-  }
-}
-
-// ============================================================
-// EVENT HANDLERS - PRESET
-// ============================================================
-
-// preset select change
-presetSelect.addEventListener('change', async () => {
-  currentPresetIndex = parseInt(presetSelect.value, 10);
-  updatePresetInfo();
-  
-  // save active preset index for background script
-  await chrome.storage.local.set({ activePresetIndex: currentPresetIndex });
-  
-  if (csvEditorContainer.style.display === 'block') {
-    updateCsvTextarea();
-  }
-  
-  // auto-apply when switching presets
-  applyPresetToInput();
-});
-
-// preset name change
-presetNameInput.addEventListener('change', async () => {
-  const newName = presetNameInput.value.trim();
-  if (!newName) {
-    presetNameInput.value = presets[currentPresetIndex].name;
-    return;
-  }
-  
-  presets[currentPresetIndex].name = newName;
-  await savePresets();
-  updatePresetSelector();
-  showStatus('Preset renamed', 'success');
-});
-
-// toggle csv editor
-let csvEditorVisible = false;
-
-editCsvBtn.addEventListener('click', () => {
-  csvEditorVisible = !csvEditorVisible;
-  
-  if (csvEditorVisible) {
-    updateCsvTextarea();
-    csvEditorContainer.style.display = 'block';
-    editCsvBtn.textContent = 'Hide';
-  } else {
-    csvEditorContainer.style.display = 'none';
-    editCsvBtn.textContent = 'Edit';
-  }
-});
-
-// save csv
-saveCsvBtn.addEventListener('click', async () => {
-  const csvContent = csvTextarea.value;
-  const keywords = parseCsvToKeywords(csvContent);
-  
-  if (keywords.length === 0) {
-    showStatus('Invalid CSV. Format: rank,key_word', 'error');
-    return;
-  }
-  
-  if (keywords.length > MAX_KEYWORDS) {
-    showStatus('Too many keywords. Max: ' + MAX_KEYWORDS, 'error');
-    return;
-  }
-  
-  presets[currentPresetIndex].csv = csvContent;
-  const success = await savePresets();
-  
-  if (success) {
-    updatePresetInfo();
-    showStatus('Saved ' + keywords.length + ' keywords', 'success');
-  } else {
-    showStatus('Failed to save', 'error');
-  }
-});
-
-// reset current preset to default
-resetCsvBtn.addEventListener('click', async () => {
-  const defaults = getDefaultPresets();
-  presets[currentPresetIndex] = { ...defaults[currentPresetIndex] };
-  
-  const success = await savePresets();
-  
-  if (success) {
-    updatePresetSelector();
-    updatePresetInfo();
-    updateCsvTextarea();
-    showStatus('Reset to default', 'success');
-  } else {
-    showStatus('Failed to reset', 'error');
-  }
-});
-
-// apply preset to search input
-applyPresetBtn.addEventListener('click', () => {
-  const preset = presets[currentPresetIndex];
-  const keywords = parseCsvToKeywords(preset.csv);
-  
-  if (keywords.length === 0) {
-    showStatus('No keywords in preset', 'error');
-    return;
-  }
-  
-  const isRegexMode = regexModeRadio.checked;
-  
-  if (isRegexMode) {
-    const regexPattern = buildRegexFromKeywords(keywords);
-    caseInsensitiveCheckbox.checked = true;
-    globalSearchCheckbox.checked = true;
-    patternInput.value = regexPattern;
-    showStatus('Loaded ' + keywords.length + ' keywords (regex)', 'success');
-  } else {
-    caseInsensitiveCheckbox.checked = true;
-    patternInput.value = keywords.join(', ');
-    showStatus('Loaded ' + keywords.length + ' keywords', 'success');
-  }
-});
-
-// ============================================================
-// SEARCH MODE UI
-// ============================================================
-
-function updateSearchModeUI() {
-  const isRegexMode = regexModeRadio.checked;
-  
-  if (isRegexMode) {
-    patternLabel.textContent = 'Regular Expression Pattern:';
-    patternInput.placeholder = 'e.g., \\d{3}-\\d{4}';
-    globalLabel.style.display = 'flex';
-  } else {
-    patternLabel.textContent = 'Keywords (comma separated):';
-    patternInput.placeholder = 'e.g., error, failed, exception';
-    globalLabel.style.display = 'none';
-  }
-}
-
-regexModeRadio.addEventListener('change', () => {
-  updateSearchModeUI();
-  applyPresetToInput();
-});
-keywordModeRadio.addEventListener('change', () => {
-  updateSearchModeUI();
-  applyPresetToInput();
-});
-
-// ============================================================
-// CONTENT SCRIPT INJECTION
-// ============================================================
-
-async function injectScripts(tabId) {
-  if (injectedTabs.has(tabId)) {
-    return;
-  }
-  
-  try {
-    await chrome.scripting.insertCSS({
-      target: { tabId: tabId },
-      files: ['styles.css']
-    });
-    
-    await chrome.scripting.executeScript({
-      target: { tabId: tabId },
-      files: ['content.js']
-    });
-    
-    injectedTabs.add(tabId);
-  } catch (error) {
-    injectedTabs.delete(tabId);
-    console.error('Injection error:', error);
-    
-    let errorMessage = 'Cannot run on this page';
-    
-    if (error && error.message) {
-      if (error.message.includes('Cannot access') || error.message.includes('chrome://')) {
-        errorMessage = 'Cannot run on chrome:// or internal pages. Try a regular website.';
-      } else if (error.message.includes('Cannot access contents of url')) {
-        errorMessage = 'This page does not allow extensions to run.';
-      } else {
-        errorMessage = 'Cannot run on this page: ' + error.message;
-      }
-    }
-    
-    throw new Error(errorMessage);
-  }
-}
-
-async function sendMessageToTab(tabId, message) {
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, message);
-    return response;
-  } catch (error) {
-    let needsRetry = false;
-    if (error && error.message) {
-      if (error.message.includes('Receiving end does not exist')) {
-        needsRetry = true;
-      }
-    }
-
-    if (!needsRetry) {
-      throw error;
-    }
-
-    injectedTabs.delete(tabId);
-    await injectScripts(tabId);
-
-    try {
-      const retryResponse = await chrome.tabs.sendMessage(tabId, message);
-      return retryResponse;
-    } catch (retryError) {
-      if (retryError && retryError.message) {
-        if (retryError.message.includes('Receiving end does not exist')) {
-          throw new Error('content script unavailable');
-        }
-      }
-      throw retryError;
-    }
-  }
-}
-
-// ============================================================
-// SEARCH / CLEAR HANDLERS
-// ============================================================
-
-searchBtn.addEventListener('click', async () => {
-  const pattern = patternInput.value.trim();
-
-  if (!pattern) {
-    showStatus('Enter a pattern or keywords', 'error');
-    return;
-  }
-  
-  showStatus('Searching...', 'info');
-
-  const isRegexMode = regexModeRadio.checked;
-
-  if (isRegexMode) {
-    try {
-      const flags = buildRegexFlags();
-      new RegExp(pattern, flags);
-    } catch (e) {
-      showStatus('Invalid regex: ' + e.message, 'error');
-      return;
-    }
-  }
-
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-
-  if (!tabs || tabs.length === 0) {
-    showStatus('No active tab found', 'error');
-    return;
-  }
-
-  const tab = tabs[0];
-  const tabId = tab.id;
-
-  // block chrome://, edge://, about:, etc.
-  if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:'))) {
-    showStatus('Cannot run on internal pages. Try a regular website.', 'error');
-    return;
-  }
-
-  try {
-    await injectScripts(tabId);
-
-    let searchParams;
-
-    if (isRegexMode) {
-      searchParams = {
-        action: 'search',
-        mode: 'regex',
-        pattern: pattern,
-        flags: buildRegexFlags()
-      };
-    } else {
-      searchParams = {
-        action: 'search',
-        mode: 'keywords',
-        keywords: parseKeywords(pattern),
-        caseInsensitive: caseInsensitiveCheckbox.checked,
-        intersectionMode: false
-      };
-    }
-
-    const response = await sendMessageToTab(tabId, searchParams);
-
-    if (response && response.success) {
-      const count = response.count || 0;
-      showStatus('Found ' + count + ' match(es)', 'success');
-      
-      // display hotspots
-      if (response.hotspots && response.hotspots.length > 0) {
-        displayHotspots(response.hotspots, tabId);
-      } else {
-        clearHotspots();
-      }
-    } else {
-      const errorMsg = (response && response.error) ? response.error : 'Search failed';
-      const missingKeywords = (response && response.missingKeywords) ? response.missingKeywords : [];
-
-      if (missingKeywords.length > 0) {
-        showStatus('Missing: ' + missingKeywords.join(', '), 'error');
-      } else {
-        showStatus(errorMsg, 'error');
-      }
-      clearHotspots();
-    }
-  } catch (error) {
-    showStatus('Error: ' + error.message, 'error');
-    clearHotspots();
-  }
-});
-
-clearBtn.addEventListener('click', async () => {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  
-  if (!tabs || tabs.length === 0) {
-    showStatus('No active tab found', 'error');
-    return;
-  }
-
-  const tab = tabs[0];
-  const tabId = tab.id;
-
-  if (tab.url && (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:'))) {
-    showStatus('Cannot run on internal pages.', 'error');
-    return;
-  }
-
-  try {
-    await injectScripts(tabId);
-    const response = await sendMessageToTab(tabId, { action: 'clear' });
-
-    if (response && response.success) {
-      showStatus('Highlights cleared', 'success');
-      patternInput.value = '';
-      clearHotspots();
-    }
-  } catch (error) {
-    showStatus('Error: ' + error.message, 'error');
-  }
-});
-
-// close button
-closeBtn.addEventListener('click', () => {
-  window.close();
-});
-
-// toggle switch - auto search when on, clear when off
-toggleSwitch.addEventListener('change', async () => {
-  // save switch state to storage for background script
-  await chrome.storage.local.set({ autoSearchEnabled: toggleSwitch.checked });
-  
-  if (!toggleSwitch.checked) {
-    // switch turned off - clear highlights
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    
-    if (tabs && tabs.length > 0) {
-      const tabId = tabs[0].id;
-      try {
-        await injectScripts(tabId);
-        await sendMessageToTab(tabId, { action: 'clear' });
-        showStatus('Auto-search OFF', 'info');
-        clearHotspots();
-      } catch (error) {
-        // ignore errors
-      }
-    }
-  } else {
-    // switch turned on - auto execute search with default preset
-    showStatus('Auto-search ON', 'success');
-    searchBtn.click();
-  }
-});
-
-// ============================================================
-// UTILITY FUNCTIONS
-// ============================================================
-
-function parseKeywords(input) {
-  // split only by comma, preserve spaces within keywords
-  const keywords = input
-    .split(',')
-    .map(k => k.trim())
-    .filter(k => k.length > 0);
-  
-  return keywords;
-}
-
-function buildRegexFlags() {
-  let flags = '';
-  
-  if (caseInsensitiveCheckbox.checked) {
-    flags += 'i';
-  }
-  
-  if (globalSearchCheckbox.checked) {
-    flags += 'g';
-  }
-  
-  return flags;
-}
-
-function showStatus(message, type) {
-  statusDiv.textContent = message;
-  statusDiv.className = type;
-  statusDiv.style.display = 'block';
-  
-  if (type === 'success') {
-    setTimeout(() => {
-      statusDiv.style.display = 'none';
-    }, 5000);
-  }
-}
-
-patternInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') {
-    searchBtn.click();
-  }
-});
-
-// ============================================================
-// HOTSPOTS DISPLAY
-// ============================================================
-
-let currentTabId = null;
-
-function displayHotspots(hotspots, tabId) {
-  currentTabId = tabId;
-  
-  if (!hotspotsContainer || !hotspotsList) {
-    return;
-  }
-  
-  hotspotsList.innerHTML = '';
-  
-  if (hotspots.length === 0) {
-    hotspotsContainer.style.display = 'none';
-    return;
-  }
-  
-  hotspotsContainer.style.display = 'block';
-  
-  // show TOP3 density areas
-  for (let i = 0; i < hotspots.length; i++) {
-    const hotspot = hotspots[i];
-    
-    const item = document.createElement('div');
-    item.className = 'hotspot-item';
-    item.setAttribute('data-area', hotspot.areaIndex);
-    
-    // rank badge
-    const rankBadge = document.createElement('span');
-    rankBadge.className = 'hotspot-rank';
-    rankBadge.textContent = '#' + hotspot.rank;
-    
-    const info = document.createElement('div');
-    info.className = 'hotspot-info';
-    
-    const positionText = document.createElement('span');
-    positionText.className = 'hotspot-line';
-    positionText.textContent = hotspot.position + ' (' + hotspot.count + ' matches)';
-    
-    const preview = document.createElement('span');
-    preview.className = 'hotspot-preview';
-    preview.textContent = hotspot.preview || '...';
-    
-    info.appendChild(positionText);
-    info.appendChild(preview);
-    
-    item.appendChild(rankBadge);
-    item.appendChild(info);
-    
-    item.addEventListener('click', () => {
-      scrollToHotspot(hotspot.areaIndex);
-    });
-    
-    hotspotsList.appendChild(item);
-  }
-}
-
-function clearHotspots() {
-  if (hotspotsContainer) {
-    hotspotsContainer.style.display = 'none';
-  }
-  if (hotspotsList) {
-    hotspotsList.innerHTML = '';
-  }
-}
-
-async function scrollToHotspot(areaIndex) {
-  if (!currentTabId) {
-    showStatus('No active tab', 'error');
-    return;
-  }
-  
-  try {
-    const response = await sendMessageToTab(currentTabId, {
-      action: 'scrollToHotspot',
-      areaIndex: areaIndex
-    });
-    
-    if (response && response.success) {
-      showStatus('Navigated to hotspot', 'success');
-    }
-  } catch (error) {
-    console.error('Failed to scroll to hotspot:', error);
-    showStatus('Navigation failed', 'error');
-  }
-}
-
-// ============================================================
-// INITIALIZATION
-// ============================================================
 
 async function init() {
-  await loadPresets();
-  updatePresetSelector();
-  updatePresetInfo();
-  updateSearchModeUI();
-  
-  // auto-apply default preset on load
-  applyPresetToInput();
-  
-  // load switch state from storage
-  try {
-    const result = await chrome.storage.local.get(['autoSearchEnabled']);
-    if (result.autoSearchEnabled !== undefined) {
-      toggleSwitch.checked = result.autoSearchEnabled;
-    }
-  } catch (e) {
-    // ignore errors
+  settings = await Core.loadSettings();
+  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  host = tab && tab.url ? Core.hostFromUrl(tab.url) : '';
+  pageState = await detectPageState();
+  hasAccess = await chrome.permissions.contains(Core.HOST_PERMISSION).catch(() => false);
+
+  ui.ignoreCase.checked = settings.options.ignoreCase;
+  ui.smartMatch.checked = settings.options.smartMatch;
+  renderPresetSelect();
+  renderModeUI();
+  renderAccessUI();
+  renderPageNotice();
+  if (pageState !== 'ok') return;
+
+  const state = await contentState();
+  if (state && state.active) {
+    // auto-highlight already ran on this page: show results instantly
+    renderResults(state);
+    if (state.running) showStatus('Searching…', 'progress');
+    return;
   }
-  
-  // save active preset index for background script
-  await chrome.storage.local.set({ activePresetIndex: currentPresetIndex });
-  
-  // auto search if switch is on
-  if (toggleSwitch.checked) {
-    // small delay to ensure UI is ready
-    setTimeout(() => {
-      searchBtn.click();
-    }, 100);
+  if (state && state.autoSuppressed) {
+    showStatus('Highlights were cleared on this page. Press Search to show them again.', 'info');
+    return;
+  }
+  if (settings.autoEnabled && !siteDisabled()) {
+    // no host access yet, or the page loaded before RSearch was enabled
+    runSearch();
   }
 }
 
-init();
+init().catch(error => showStatus(friendlyError(error), 'error'));

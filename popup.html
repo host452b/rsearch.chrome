@@ -6,644 +6,371 @@
   <title>RSearch</title>
   <style>
     :root {
-      --background: #ffffff;
-      --foreground: #0a0a0a;
-      --muted: #f4f4f5;
-      --muted-foreground: #71717a;
-      --border: #e4e4e7;
-      --input: #e4e4e7;
-      --primary: #dc2626;
-      --primary-foreground: #ffffff;
-      --secondary: #f4f4f5;
-      --secondary-foreground: #18181b;
-      --accent: #f4f4f5;
-      --accent-foreground: #18181b;
-      --destructive: #ef4444;
-      --ring: #dc2626;
+      --bg: #0F172A;
+      --bg-deep: #020617;
+      --card: #1B2336;
+      --surface-hover: #273349;
+      --muted: #272F42;
+      --muted-fg: #94A3B8;
+      --border: #334155;
+      --border-light: #475569;
+      --fg: #F8FAFC;
+      --fg-soft: #CBD5E1;
+      --accent: #22C55E;
+      --primary: #DC2626;
+      --warning: #F59E0B;
+      --info: #3B82F6;
+      --radius-card: 10px;
       --radius: 6px;
+      --radius-chip: 3px;
+      --mono: "SF Mono", Monaco, Menlo, monospace;
     }
-    
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    
-    html, body {
-      width: 340px;
-      min-height: fit-content;
-      max-height: none;
-      margin: 0;
-      padding: 0;
-      overflow: visible;
-    }
-    
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { width: 360px; }
+
     body {
-      padding: 16px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
-      font-size: 14px;
-      line-height: 1.5;
-      color: var(--foreground);
-      background: var(--background);
+      padding: 14px;
+      font: 13px/1.45 -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      background-image: radial-gradient(ellipse at top, rgba(34, 197, 94, 0.06), transparent 60%);
     }
-    
+
+    button, input, select, textarea { font: inherit; color: inherit; }
+
+    [hidden] { display: none !important; }
+
     /* header */
     .header {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 16px;
       padding-bottom: 12px;
+      margin-bottom: 12px;
       border-bottom: 1px solid var(--border);
     }
-    
     .logo {
-      width: 24px;
-      height: 24px;
+      width: 24px; height: 24px;
+      border-radius: var(--radius);
       background: var(--primary);
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 14px;
-      color: var(--primary-foreground);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font: 700 13px var(--mono);
     }
-    
-    .header h1 {
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-    
-    .close-btn {
+    .header h1 { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .auto-control {
       margin-left: auto;
-      width: 24px;
-      height: 24px;
-      border: none;
-      background: transparent;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--fg-soft);
       cursor: pointer;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      color: var(--muted-foreground);
-      transition: all 0.15s ease;
     }
-    
-    .close-btn:hover {
-      background: var(--muted);
-      color: var(--foreground);
+
+    /* switch */
+    .switch { position: relative; width: 34px; height: 20px; flex-shrink: 0; }
+    .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+    .switch .track {
+      position: absolute; inset: 0;
+      border-radius: 10px;
+      background: var(--border);
+      transition: background 0.2s ease;
     }
-    
-    /* section */
-    .section {
-      margin-bottom: 16px;
+    .switch .track::before {
+      content: "";
+      position: absolute; top: 3px; left: 3px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--fg);
+      transition: transform 0.2s ease;
     }
-    
-    .section-title {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted-foreground);
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::before { transform: translateX(14px); }
+    .switch input:focus-visible + .track { outline: 2px solid var(--info); outline-offset: 2px; }
+    .switch.small { width: 28px; height: 16px; }
+    .switch.small .track::before { width: 10px; height: 10px; }
+    .switch.small input:checked + .track::before { transform: translateX(12px); }
+
+    /* banner */
+    .banner {
+      display: flex; gap: 10px; align-items: center;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: var(--radius-card);
+      background: rgba(245, 158, 11, 0.08);
+      font-size: 12px; color: var(--fg-soft);
     }
-    
-    /* radio group */
-    .radio-group {
-      display: flex;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    
-    .radio-group label {
-      flex: 1;
-      padding: 8px 12px;
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      border-right: 1px solid var(--border);
-      background: var(--background);
-      color: var(--muted-foreground);
-    }
-    
-    .radio-group label:last-child {
-      border-right: none;
-    }
-    
-    .radio-group input {
-      display: none;
-    }
-    
-    .radio-group input:checked + span {
-      color: var(--foreground);
-    }
-    
-    .radio-group label:has(input:checked) {
-      background: var(--muted);
-      color: var(--foreground);
-    }
-    
-    /* preset card */
-    .preset-card {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+    .banner strong { color: var(--fg); font-weight: 600; }
+    .banner button { flex-shrink: 0; }
+
+    .notice {
       padding: 12px;
-    }
-    
-    .preset-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    
-    .preset-row:last-child {
-      margin-bottom: 0;
-    }
-    
-    /* select */
-    select {
-      flex: 1;
-      height: 32px;
-      padding: 0 8px;
-      font-size: 13px;
-      border: 1px solid var(--input);
-      border-radius: var(--radius);
-      background: var(--background);
-      color: var(--foreground);
-      cursor: pointer;
-      outline: none;
-    }
-    
-    select:focus {
-      border-color: var(--ring);
-      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
-    }
-    
-    /* input */
-    input[type="text"] {
-      flex: 1;
-      height: 32px;
-      padding: 0 10px;
-      font-size: 13px;
-      border: 1px solid var(--input);
-      border-radius: var(--radius);
-      background: var(--background);
-      color: var(--foreground);
-      outline: none;
-    }
-    
-    input[type="text"]:focus {
-      border-color: var(--ring);
-      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
-    }
-    
-    input[type="text"]::placeholder {
-      color: var(--muted-foreground);
-    }
-    
-    #pattern {
-      height: 36px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      background: var(--card);
+      color: var(--fg-soft);
       font-size: 12px;
     }
-    
-    /* badge */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      font-size: 11px;
-      font-weight: 500;
-      border-radius: 9999px;
-      background: var(--muted);
-      color: var(--muted-foreground);
-      white-space: nowrap;
+    .notice button { margin-top: 8px; }
+
+    /* segmented control */
+    .segmented {
+      display: flex;
+      padding: 3px;
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-deep);
     }
-    
-    /* button */
+    .segmented label {
+      flex: 1;
+      padding: 4px 0;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 12px; font-weight: 500;
+      color: var(--muted-fg);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+    .segmented label:has(input:checked) { background: var(--muted); color: var(--fg); }
+    .segmented label:has(input:focus-visible) { outline: 2px solid var(--info); outline-offset: -2px; }
+
+    /* form controls */
+    .row { display: flex; gap: 6px; align-items: center; }
+    .row + .row, .row + .field, .field + .row { margin-top: 8px; }
+
+    select, input[type="text"], textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-deep);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    select, input[type="text"] { height: 32px; padding: 0 10px; font-size: 12px; }
+    select { cursor: pointer; }
+    select:focus, input[type="text"]:focus, textarea:focus { border-color: var(--border-light); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); }
+    input::placeholder, textarea::placeholder { color: var(--muted-fg); }
+    #pattern { font-family: var(--mono); font-size: 11.5px; }
+
+    textarea {
+      height: 140px; min-height: 80px; max-height: 260px;
+      padding: 8px;
+      font: 11px/1.5 var(--mono);
+      resize: vertical;
+    }
+
+    /* buttons */
     button {
       height: 32px;
       padding: 0 12px;
-      font-size: 13px;
-      font-weight: 500;
-      border: none;
+      border: 1px solid transparent;
       border-radius: var(--radius);
+      font-size: 12px; font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s ease;
-      outline: none;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      white-space: nowrap;
     }
-    
-    .btn-primary {
-      background: var(--primary);
-      color: var(--primary-foreground);
-    }
-    
-    .btn-primary:hover {
-      background: #b91c1c;
-    }
-    
-    .btn-secondary {
-      background: var(--secondary);
-      color: var(--secondary-foreground);
-      border: 1px solid var(--border);
-    }
-    
-    .btn-secondary:hover {
-      background: var(--accent);
-    }
-    
-    .btn-ghost {
-      background: transparent;
-      color: var(--muted-foreground);
-    }
-    
-    .btn-ghost:hover {
-      background: var(--muted);
-      color: var(--foreground);
-    }
-    
-    /* button group */
-    .btn-group {
-      display: flex;
-      gap: 6px;
-    }
-    
-    .btn-group button {
-      flex: 1;
-    }
-    
-    /* csv editor */
-    .csv-editor {
-      display: none;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid var(--border);
-    }
-    
-    .csv-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    
-    .csv-header span {
-      font-size: 11px;
-      color: var(--muted-foreground);
-    }
-    
-    textarea {
-      width: 100%;
-      height: 120px;
-      padding: 8px;
-      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      border: 1px solid var(--input);
-      border-radius: var(--radius);
-      background: var(--background);
-      color: var(--foreground);
-      resize: vertical;
-      min-height: 80px;
-      max-height: 180px;
-      outline: none;
-    }
-    
-    textarea:focus {
-      border-color: var(--ring);
-      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
-    }
-    
-    #saveCsvBtn {
-      width: 100%;
+    button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #B91C1C; }
+    .btn-secondary { background: var(--card); border-color: var(--border); color: var(--fg-soft); }
+    .btn-secondary:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); }
+    .btn-ghost { background: transparent; color: var(--muted-fg); }
+    .btn-ghost:hover:not(:disabled) { background: var(--muted); color: var(--fg); }
+    .btn-icon { width: 32px; padding: 0; font-size: 14px; }
+    .grow { flex: 1; }
+
+    .options { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0; }
+    .options label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-soft); cursor: pointer; }
+    .options input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+
+    .editor {
       margin-top: 8px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      background: var(--card);
     }
-    
-    /* divider */
-    .divider {
-      height: 1px;
-      background: var(--border);
-      margin: 16px 0;
-    }
-    
-    /* label */
-    .label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 6px;
-      color: var(--foreground);
-    }
-    
-    /* checkbox */
-    .checkbox-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      color: var(--foreground);
-      cursor: pointer;
-    }
-    
-    .checkbox-group input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      border: 1px solid var(--input);
-      border-radius: 4px;
-      cursor: pointer;
-      accent-color: var(--primary);
-    }
-    
-    /* main buttons */
-    .main-buttons {
-      display: flex;
-      gap: 8px;
-    }
-    
-    .main-buttons button {
-      flex: 1;
-      height: 36px;
-      font-size: 14px;
-    }
-    
+    .hint { font-size: 11px; color: var(--muted-fg); }
+    .editor .hint { margin: 6px 0 8px; }
+
     /* status */
     #status {
-      margin-top: 12px;
-      padding: 8px 12px;
+      margin-top: 10px;
+      padding: 7px 10px;
       border-radius: var(--radius);
-      font-size: 13px;
-      display: none;
-    }
-    
-    #status.success {
-      background: #f0fdf4;
-      color: #166534;
-      border: 1px solid #bbf7d0;
-      display: block;
-    }
-    
-    #status.error {
-      background: #fef2f2;
-      color: #991b1b;
-      border: 1px solid #fecaca;
-      display: block;
-    }
-    
-    #status.progress {
-      background: #eff6ff;
-      color: #1e40af;
-      border: 1px solid #bfdbfe;
-      display: block;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-    
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.7; }
-    }
-    
-    #status.info {
-      background: #f8fafc;
-      color: #475569;
-      border: 1px solid var(--border);
-      display: block;
-    }
-    
-    /* Hotspots Section */
-    .hotspots-container {
-      margin-top: 12px;
-      padding: 8px;
-      background: var(--secondary);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-    }
-    
-    .hotspots-header {
-      margin-bottom: 8px;
-    }
-    
-    .hotspots-title {
       font-size: 12px;
-      font-weight: 600;
-      color: var(--foreground);
-    }
-    
-    .hotspots-hint {
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-    
-    .hotspots-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    
-    .hotspot-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 8px;
-      background: var(--background);
       border: 1px solid var(--border);
-      border-radius: calc(var(--radius) - 2px);
-      cursor: pointer;
-      transition: all 0.15s ease;
+      background: var(--card);
+      color: var(--fg-soft);
     }
-    
-    .hotspot-item:hover {
-      border-color: var(--primary);
-      background: #fef2f2;
+    #status.success { border-color: rgba(34, 197, 94, 0.4); color: #86EFAC; }
+    #status.error { border-color: rgba(220, 38, 38, 0.5); color: #FCA5A5; }
+    #status.progress { border-color: rgba(59, 130, 246, 0.45); color: #93C5FD; }
+
+    /* results */
+    .results {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      background: var(--card);
     }
-    
-    .hotspot-rank {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 28px;
-      height: 20px;
-      background: var(--primary);
-      color: white;
-      font-size: 10px;
-      font-weight: 600;
-      border-radius: 4px;
-      flex-shrink: 0;
+    .results-head { display: flex; align-items: center; gap: 8px; }
+    .count { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+    .count-label { font-size: 12px; color: var(--muted-fg); }
+    .nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+    .nav button { width: 26px; height: 26px; padding: 0; font-size: 13px; }
+    .nav-pos { min-width: 64px; text-align: center; font: 11px var(--mono); color: var(--fg-soft); }
+    .meta { margin-top: 2px; font-size: 11px; color: var(--muted-fg); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 24px; padding: 0 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-chip);
+      background: var(--bg-deep);
+      font-size: 11px; color: var(--fg-soft);
     }
-    
-    .hotspot-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
-      flex: 1;
+    .chip:hover { background: var(--surface-hover); color: var(--fg); }
+    .chip b { font: 600 11px var(--mono); color: var(--fg); }
+    .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+    .section-title {
+      margin: 12px 0 6px;
+      font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--muted-fg);
     }
-    
-    .hotspot-line {
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--foreground);
+    .hotspots { display: flex; flex-direction: column; gap: 6px; }
+    .hotspot {
+      display: block; width: 100%; height: auto;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-deep);
+      text-align: left;
     }
-    
+    .hotspot:hover { border-color: var(--border-light); background: var(--surface-hover); }
+    .hotspot-top { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--fg-soft); }
+    .hotspot-rank { font: 600 11px var(--mono); color: var(--fg); }
     .hotspot-preview {
-      font-size: 10px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      margin-top: 4px;
+      font: 11px var(--mono);
+      color: var(--muted-fg);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    
-    /* switch toggle */
-    .switch {
-      position: relative;
-      width: 36px;
-      height: 20px;
-      margin-left: auto;
-      margin-right: 8px;
+
+    .results-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+    /* footer */
+    .footer {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 12px; padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px; color: var(--muted-fg);
     }
-    
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    
-    .switch-slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #ef4444;
-      transition: 0.3s;
-      border-radius: 20px;
-    }
-    
-    .switch-slider:before {
-      position: absolute;
-      content: "";
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: 0.3s;
-      border-radius: 50%;
-    }
-    
-    .switch input:checked + .switch-slider {
-      background-color: #22c55e;
-    }
-    
-    .switch input:checked + .switch-slider:before {
-      transform: translateX(16px);
-    }
+    .footer .site { font-family: var(--mono); color: var(--fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px; }
+    .footer label { margin-left: auto; display: flex; align-items: center; gap: 6px; cursor: pointer; }
   </style>
 </head>
 <body>
-  <!-- Header -->
   <div class="header">
     <div class="logo">R</div>
     <h1>RSearch</h1>
-    <label class="switch" title="Toggle highlight">
-      <input type="checkbox" id="toggleSwitch" checked />
-      <span class="switch-slider"></span>
+    <label class="auto-control" title="Highlight every page you open with the active preset">
+      <span>Auto</span>
+      <span class="switch">
+        <input type="checkbox" id="autoToggle" checked aria-label="Auto-highlight every page" />
+        <span class="track"></span>
+      </span>
     </label>
-    <button id="closeBtn" class="close-btn" title="Close">&#x2715;</button>
   </div>
-  
-  <!-- Mode Toggle -->
-  <div class="section">
-    <div class="radio-group">
-      <label>
-        <input type="radio" name="searchMode" id="keywordMode" value="keyword" checked />
-        <span>Keywords</span>
-      </label>
-      <label>
-        <input type="radio" name="searchMode" id="regexMode" value="regex" />
-        <span>Regex</span>
-      </label>
+
+  <div id="accessBanner" class="banner" hidden>
+    <div><strong>Allow on all sites</strong> so every page you open is highlighted automatically. Pages are processed locally.</div>
+    <button id="grantBtn" class="btn-primary">Allow</button>
+  </div>
+
+  <div id="pageNotice" class="notice" hidden></div>
+
+  <div class="segmented" role="radiogroup" aria-label="Search mode">
+    <label><input type="radio" name="mode" id="keywordMode" value="keywords" checked /><span>Keywords</span></label>
+    <label><input type="radio" name="mode" id="regexMode" value="regex" /><span>Regex</span></label>
+  </div>
+
+  <div id="presetRow" class="row">
+    <select id="presetSelect" aria-label="Keyword preset"></select>
+    <button id="editBtn" class="btn-secondary" title="Edit preset keywords">Edit</button>
+  </div>
+
+  <div id="editor" class="editor" hidden>
+    <input type="text" id="presetName" placeholder="Preset name" aria-label="Preset name" />
+    <p class="hint">One keyword per line as <code>rank,keyword</code>. Max 500. With Smart match, keywords match at word or camelCase starts, and keywords of 5 letters or fewer must be whole words.</p>
+    <textarea id="csvText" spellcheck="false" aria-label="Preset keywords CSV"></textarea>
+    <div class="row">
+      <button id="saveCsvBtn" class="btn-primary grow">Save</button>
+      <button id="resetCsvBtn" class="btn-ghost" title="Restore this preset's default keywords">Reset to default</button>
     </div>
   </div>
-  
-  <!-- Preset Section -->
-  <div class="section">
-    <div class="section-title">Presets</div>
-    <div class="preset-card">
-      <div class="preset-row">
-        <select id="presetSelect"></select>
-      </div>
-      <div class="preset-row">
-        <input type="text" id="presetNameInput" placeholder="Preset name" />
-        <span id="presetInfo" class="badge">0/500</span>
-      </div>
-      <div class="preset-row btn-group">
-        <button id="applyPresetBtn" class="btn-primary">Apply</button>
-        <button id="editCsvBtn" class="btn-secondary">Edit</button>
-        <button id="resetCsvBtn" class="btn-ghost">Reset</button>
-      </div>
-      
-      <div id="csvEditorContainer" class="csv-editor">
-        <div class="csv-header">
-          <span>Format: rank,key_word</span>
-          <span>Max 500 keywords</span>
-        </div>
-        <textarea id="csvTextarea" spellcheck="false" placeholder="rank,key_word&#10;1,error&#10;2,failed&#10;3,exception"></textarea>
-        <button id="saveCsvBtn" class="btn-primary">Save Changes</button>
-      </div>
-    </div>
+
+  <div class="field" style="margin-top: 8px;">
+    <input type="text" id="pattern" autocomplete="off" spellcheck="false" />
   </div>
-  
-  <div class="divider"></div>
-  
-  <!-- Search Input -->
-  <div class="section">
-    <label for="pattern" id="patternLabel" class="label">Pattern</label>
-    <input type="text" id="pattern" placeholder="Enter regex pattern..." />
+
+  <div class="options">
+    <label title="Match regardless of upper/lower case"><input type="checkbox" id="ignoreCase" checked />Ignore case</label>
+    <label id="smartLabel" title="Skip matches inside other words (fault ≠ default, oom ≠ zoom); still matches TypeError, CUDA_ERROR"><input type="checkbox" id="smartMatch" checked />Smart match</label>
+    <label id="findAllLabel" title="Highlight every match instead of only the first" hidden><input type="checkbox" id="findAll" checked />Find all</label>
   </div>
-  
-  <!-- Options -->
-  <div class="checkbox-group">
-    <label>
-      <input type="checkbox" id="caseInsensitive" checked />
-      <span>Ignore Case</span>
-    </label>
-    <label id="globalLabel">
-      <input type="checkbox" id="globalSearch" checked />
-      <span>Find All</span>
-    </label>
-  </div>
-  
-  <!-- Main Buttons -->
-  <div class="main-buttons">
-    <button id="searchBtn" class="btn-primary">Search</button>
+
+  <div class="row">
+    <button id="searchBtn" class="btn-primary grow">Search</button>
     <button id="clearBtn" class="btn-secondary">Clear</button>
   </div>
-  
-  <div id="status"></div>
-  
-  <!-- Hotspots Section -->
-  <div id="hotspotsContainer" class="hotspots-container" style="display: none;">
-    <div class="hotspots-header">
-    <div class="hotspots-title">Top 3 hotspots</div>
-      <div class="hotspots-hint">Click to jump to high density areas</div>
+
+  <div id="status" role="status" hidden></div>
+
+  <div id="results" class="results" hidden>
+    <div class="results-head">
+      <span id="count" class="count">0</span>
+      <span class="count-label">matches</span>
+      <div class="nav">
+        <button id="prevBtn" class="btn-secondary" title="Previous match (↑ or k)" aria-label="Previous match">‹</button>
+        <span id="navPos" class="nav-pos">–</span>
+        <button id="nextBtn" class="btn-secondary" title="Next match (↓ or j)" aria-label="Next match">›</button>
+      </div>
     </div>
-    <div id="hotspotsList" class="hotspots-list"></div>
+    <div id="meta" class="meta"></div>
+    <div id="chips" class="chips"></div>
+
+    <div id="hotspotsBlock" hidden>
+      <div class="section-title">Top hotspots</div>
+      <div id="hotspots" class="hotspots"></div>
+    </div>
+
+    <div class="results-actions">
+      <button id="copyBtn" class="btn-secondary grow" title="Copy the lines containing critical, error and problem matches">Copy error lines</button>
+    </div>
   </div>
-  
+
+  <div id="footer" class="footer" hidden>
+    <span id="siteName" class="site"></span>
+    <label title="Auto-highlight pages on this site">
+      Auto on this site
+      <span class="switch small">
+        <input type="checkbox" id="siteToggle" checked aria-label="Auto-highlight on this site" />
+        <span class="track"></span>
+      </span>
+    </label>
+  </div>
+
+  <script src="shared.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -61,9 +61,14 @@ Severity gradient (8 steps, critical → info):
 - Chrome Extension, Manifest V3
 - No build step — files ship directly from project root
 - Service worker: `background.js`
-- Popup: `popup.html` + `popup.js` + `styles.css`
-- Content script: `content.js` (injected via `chrome.scripting`)
-- Packaging: `npm run package` → `dist/rsearch-{version}.zip`
+- Shared core: `shared.js` (default keywords + severity levels, CSV parsing, trie matcher, settings) —
+  loaded by the popup (`<script>`), the service worker (`importScripts`) and injected before `content.js`
+- Popup: `popup.html` + `popup.js`
+- Content script: `content.js` + page styles `styles.css`; highlights use the CSS Custom Highlight API
+  (no DOM mutation). Injected on demand via `chrome.scripting`, and registered for every page with
+  `registerContentScripts` while auto-highlight is on and host access is granted
+- Packaging: `npm run package` → `dist/rsearch-{version}.zip` (keep `shared.js` in the package lists of
+  `scripts/package-extension.mjs` and `.github/workflows/release.yml`)
 
 ## Permissions (minimal)
 
@@ -72,6 +77,11 @@ Only these 4 permissions. Do not add more without explicit approval:
 - `scripting` — inject content script
 - `storage` — save presets locally
 - `tabs` — auto-search on tab switch
+
+Plus one optional host permission (approved 2026-11-12 for always-on auto-highlight):
+- `optional_host_permissions: ["<all_urls>"]` — requested at runtime from the popup, never at install.
+  Do not make it a required `host_permissions` entry (that disables the extension for existing users
+  on update and changes the install warning).
 
 ## Privacy
 

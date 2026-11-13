@@ -135,6 +135,7 @@ async function main() {
 
     const requiredFiles = [
       'manifest.json',
+      'shared.js',
       'content.js',
       'popup.js',
       'popup.html',

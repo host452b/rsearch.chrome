@@ -1,88 +1,91 @@
-/* highlight style for regex matches */
-/* NOTE: background-color and color are set dynamically via JavaScript inline styles */
-/* to support different colors for different keywords */
-.regex-search-highlight {
-  padding: 2px 4px !important;
-  border-radius: 3px !important;
-  font-weight: bold !important;
-  display: inline !important;
-  box-shadow: 0 0 2px rgba(0,0,0,0.3) !important;
-}
+/* RSearch page styles (injected with content.js).
+   Matches are painted via the CSS Custom Highlight API, so no markup is
+   added to the page. Colors: CLAUDE.md severity gradient, critical -> info. */
 
-/* highlight style for row-level matches */
-.rsearch-row-highlight-bg {
-  background-color: #ffe6e6 !important;
-}
+::highlight(rsearch-l0) { background-color: #DC2626; color: #FFFFFF; }
+::highlight(rsearch-l1) { background-color: #EF4444; color: #0F172A; }
+::highlight(rsearch-l2) { background-color: #F97316; color: #0F172A; }
+::highlight(rsearch-l3) { background-color: #F59E0B; color: #0F172A; }
+::highlight(rsearch-l4) { background-color: #EAB308; color: #0F172A; }
+::highlight(rsearch-l5) { background-color: #84CC16; color: #0F172A; }
+::highlight(rsearch-l6) { background-color: #22C55E; color: #0F172A; }
+::highlight(rsearch-l7) { background-color: #06B6D4; color: #0F172A; }
 
-/* row highlight start indicator */
-.rsearch-row-highlight-start {
-  box-shadow: inset 4px 0 0 #ff4444 !important;
-  padding-left: 4px !important;
-}
+/* current match while navigating */
+::highlight(rsearch-current) { background-color: #3B82F6; color: #FFFFFF; }
 
-/* Scrollbar Marker Container */
-#rsearch-scrollbar-container {
+/* scrollbar markers: a fixed strip on the right edge of the viewport.
+   every property the page could plausibly override is pinned; `top` and
+   `background-color` of markers are set inline by content.js. */
+#rsearch-overlay {
   position: fixed !important;
   top: 0 !important;
   right: 0 !important;
-  width: 16px !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 10px !important;
   height: 100vh !important;
-  z-index: 2147483647 !important; /* Max z-index */
-  pointer-events: none !important; /* Let clicks pass through */
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
   background: transparent !important;
-}
-
-/* Individual Marker */
-.rsearch-scrollbar-marker {
-  position: absolute !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 4px !important; /* Marker height */
+  transform: none !important;
+  opacity: 1 !important;
   z-index: 2147483647 !important;
-  border-radius: 2px !important;
-  box-shadow: 0 0 2px rgba(0,0,0,0.5) !important;
-  pointer-events: auto !important; /* Allow clicking marker to scroll */
-  cursor: pointer !important;
-  transform: translateY(-50%) !important; /* Center on position */
-}
-
-/* Hover effect for better visibility */
-.rsearch-scrollbar-marker:hover {
-  height: 8px !important;
-  transform: translateY(-50%) scaleX(1.5) !important;
-  transform-origin: right center !important;
-}
-
-/* Tooltip for scrollbar markers */
-#rsearch-marker-tooltip {
-  position: fixed !important;
-  right: 24px !important;
-  background: rgba(0, 0, 0, 0.85) !important;
-  color: #fff !important;
-  font-size: 12px !important;
-  line-height: 1.4 !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  white-space: nowrap !important;
   pointer-events: none !important;
-  z-index: 2147483647 !important;
-  max-width: 200px !important;
+  display: block !important;
+}
+
+#rsearch-overlay .rsearch-marker {
+  position: absolute !important;
+  left: 1px !important;
+  right: auto !important;
+  width: 8px !important;
+  height: 4px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 0 1px rgba(2, 6, 23, 0.35) !important;
+  transform: translateY(-50%) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  display: block !important;
+}
+
+#rsearch-overlay .rsearch-marker:hover {
+  left: -3px !important;
+  width: 12px !important;
+  height: 6px !important;
+}
+
+#rsearch-overlay .rsearch-tooltip {
+  position: fixed !important;
+  right: 18px !important;
+  bottom: auto !important;
+  left: auto !important;
+  display: none !important;
+  width: auto !important;
+  max-width: 420px !important;
+  margin: 0 !important;
+  padding: 4px 8px !important;
+  border: 1px solid #334155 !important;
+  border-radius: 6px !important;
+  background: #1B2336 !important;
+  color: #F8FAFC !important;
+  font: 12px/1.4 "SF Mono", Monaco, Menlo, monospace !important;
+  text-align: left !important;
+  white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   transform: translateY(-50%) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  pointer-events: none !important;
+  z-index: 2147483647 !important;
 }
 
-/* Flash animation for scrolling to a match */
-@keyframes rsearch-flash {
-  0%   { outline: 3px solid #2563eb; outline-offset: 2px; opacity: 1; }
-  25%  { outline: 3px solid #2563eb; outline-offset: 2px; opacity: 0.3; }
-  50%  { outline: 3px solid #2563eb; outline-offset: 2px; opacity: 1; }
-  75%  { outline: 3px solid #2563eb; outline-offset: 2px; opacity: 0.3; }
-  100% { outline: 3px solid transparent; outline-offset: 0; opacity: 1; }
-}
-
-.rsearch-flash {
-  animation: rsearch-flash 1.5s ease-in-out !important;
+#rsearch-overlay .rsearch-tooltip.rsearch-show {
+  display: block !important;
 }

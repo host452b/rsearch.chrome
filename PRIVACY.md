@@ -34,24 +34,30 @@ RSearch operates entirely locally in your browser:
 RSearch requires the following Chrome permissions:
 
 ### `activeTab`
-- **Why**: To access the current tab's content for search and highlighting
-- **Usage**: Only activated when you click the extension icon or when auto-search is enabled
+- **Why**: To search and highlight the current tab when you open RSearch
+- **Usage**: Only granted for the tab you clicked the extension on
 - **Scope**: Limited to the active tab only
 
 ### `scripting`
-- **Why**: To inject search and highlighting functionality into web pages
-- **Usage**: Dynamically loads content scripts when you perform a search
-- **Scope**: Only affects the current tab
+- **Why**: To run the search and highlighting code inside web pages
+- **Usage**: Injects RSearch's own bundled scripts; no remote code is ever loaded
+- **Scope**: Pages you open RSearch on, or all pages if you allow auto-highlight
 
 ### `storage`
 - **Why**: To save your preferences and custom presets locally
-- **Usage**: Stores preset configurations and switch state
+- **Usage**: Stores presets, the active preset, the auto-highlight switch, search options and the list of sites where you paused auto-highlight
 - **Scope**: Data stored locally in your browser only, never transmitted
 
 ### `tabs`
-- **Why**: To enable auto-search feature when switching tabs or loading new pages
-- **Usage**: Monitors tab changes to trigger auto-search when enabled
-- **Scope**: Only reads tab URL to determine if search should run
+- **Why**: To show results for the current tab and keep auto-highlight working when you switch tabs
+- **Usage**: Reads the tab URL to skip pages Chrome does not allow extensions on and to apply per-site pauses
+- **Scope**: URLs are used locally and never stored except the hostnames you pause
+
+### Optional: access to all sites (`<all_urls>`)
+- **Why**: Auto-highlight — highlighting every page you open without clicking the icon
+- **When**: Requested only if you click **Allow** (or turn the Auto switch on) in the popup; RSearch works without it
+- **Usage**: Runs the same local search on each page you open; page text is scanned in memory and never stored, copied or sent anywhere
+- **Revoke**: Turn the Auto switch off, or remove site access at `chrome://extensions` → RSearch → Details
 
 ## Data Storage
 
@@ -59,7 +65,8 @@ RSearch requires the following Chrome permissions:
 
 - Preset configurations (keywords, names)
 - Active preset selection
-- Auto-search toggle state
+- Auto-highlight switch state and search options
+- Hostnames where you paused auto-highlight
 
 ### Where Data Is Stored
 
