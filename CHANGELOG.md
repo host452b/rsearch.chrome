@@ -5,6 +5,49 @@ All notable changes to RSearch will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Floating minimap**: pixel texture of every match on the page, colored by severity, with a
+  density heat strip, hotspot ticks, current-match line and viewport box. Hover previews the line,
+  click jumps to the match, drag scrolls. Shown on long pages with at least 3 critical/error/problem
+  matches (or any manual search); collapse to a pill or switch off with the new **Minimap** option.
+  Rendered in a closed shadow root with constructable stylesheets, so page CSS and strict CSPs
+  (incl. Trusted Types) can't break it.
+- **Severity layers**: hide/show any severity on the page from the popup chips (eye icon) or the
+  minimap legend; navigation skips hidden layers, and jumping to a hidden severity shows it again.
+- **Unique problems**: group repeated problem lines by shape, show occurrence counts and jump to
+  each group's first occurrence; **Copy problem summary** copies the grouped results.
+- **Ignore rules**: preset phrases (`!Failures: 0`) and regex rules (`!/pattern/i`) suppress expected
+  matches. The default preset ignores common zero-error summaries and benign CI messages.
+- **Partial log notice**: recognize truncated CI log views and offer the full log when linked.
+
+### Changed
+- **Layered highlight colors**: severity is now expressed by visual weight — solid fill for
+  critical (red) and error (orange), a tint for problem (amber), a wavy underline for warning and a
+  dotted underline for notice. Custom keywords use green/cyan/pink tints. Tints and underlines keep
+  the page's text color, so they work on light and dark pages.
+- Hotspots and the heat strip weight severity steeply (critical 8, error 5, problem 2, warning 0.5,
+  notice 0.25) so frequent warnings never outrank a burst of crashes.
+- Top 3 hotspots prefer distinct bursts before picking a second window inside the same burst.
+- Minimap uses a white, clean palette (darker shades for low tiers so they read on white).
+
+### Performance
+- **Virtualized highlights**: Chrome rebuilds the markers of every registered highlight range on any
+  DOM or style change (~1 ms per 1,000 ranges per frame). Above 3,000 matches only the ranges near
+  the viewport (and near the viewport of inner scroll panes) are registered. Scrolling with the
+  minimap on a 50k-line log went from a 50–110 ms main-thread block per scroll step to none.
+- Highlight cap raised from 20,000 to 100,000 matches: a 50k-line log is now highlighted end to end
+  (~90k matches, ~0.3–0.5 s in local Chrome tests).
+- Live updates measure only new matches; ~16 anchor matches detect reflow and trigger a full
+  re-measure only when something above them moved.
+- The initial search walks and scans the page in the same time slices (no filter callback per
+  node), and the first layout is time-sliced. Long tasks vary with the page and machine.
+- Hotspots use linear selection instead of sorting every window; navigation repaints a cached
+  minimap texture instead of rebuilding it.
+
+---
+
 ## [3.5.0] - 2026-11-13
 
 ### Added

@@ -27,31 +27,54 @@ A powerful Chrome extension for advanced text searching with regex, multi-keywor
 **2. Regex Mode**
 - Full JavaScript regular expressions, ignore-case and find-all options
 
-### Severity Colors
+### Layered Severity Colors
 
-Every keyword has a severity, so the color tells you how bad a line is:
+Severity is layered by visual weight, not only by hue, so a busy log never turns into a rainbow wall —
+the worst lines jump out and noisy words stay quiet. Tints and underlines keep the page's own text
+color, so they read on light and dark pages alike.
 
-| Level | Color | Examples |
-|-------|-------|----------|
-| Critical | Red `#DC2626` | segfault, SIGSEGV, OOM, panic, Xid, heap-use-after-free, CrashLoopBackOff |
-| Error | Light red `#EF4444` | error, exception, failed, Traceback, undefined reference, Caused by |
-| Problem | Orange `#F97316` | timeout, timed out, invalid, not found, mismatch, unsupported |
-| Warning | Amber `#F59E0B` | warning, WARN, deprecated, retrying |
-| Notice / other | Yellow → cyan | expected, required, your own custom keywords |
+| Layer | Level | Look | Examples |
+|-------|-------|------|----------|
+| Must see | Critical | solid red `#DC2626` | segfault, SIGSEGV, OOM, panic, Xid, heap-use-after-free, CrashLoopBackOff |
+| Must see | Error | solid orange `#F97316` | error, exception, failed, Traceback, undefined reference, Caused by |
+| Should see | Problem | amber tint | timeout, timed out, invalid, not found, mismatch, unsupported |
+| May see | Warning | wavy yellow underline | warning, WARN, deprecated, retrying |
+| May see | Notice | dotted gray underline | expected, required, requires |
+| — | Custom | green / cyan / pink tints | your own keywords and regex matches |
+
+Every level is also a **layer**: hide or show it from the popup (eye icon on each severity chip) or
+the minimap legend.
+
+### Floating Minimap
+
+- A small floating map on the right shows where matches sit on the whole page, as a pixel texture
+  colored by severity, with a density heat strip (amber → red) along its left edge
+- Dark ticks mark the Top 3 hotspots; a blue line marks the current match
+- Hover to preview the line, click to jump to that match, drag to scroll
+- Appears on long pages with real problems (or any manual search); collapse it to a pill with `–`,
+  or turn it off with the **Minimap** option in the popup
 
 ### Find the Real Problem Fast
 
 - Severity chips in the popup (e.g. `12 Critical · 300 Error`) — click one to jump to the next match of that severity
 - Previous / next match navigation (`‹ ›`, or `j`/`k` / arrow keys in the popup), scrolling nested log panes too
-- Top 3 hotspots: the densest, most severe, non-overlapping regions of the page, with a preview of the worst line
-- Scrollbar markers on the right edge, colored by severity — hover for the line, click to jump
-- **Copy error lines**: copies the deduplicated critical/error/problem lines for a bug report or chat
+- Top 3 hotspots: the densest, most severe regions of the page — distinct bursts first — with a preview of the worst line
+- Scrollbar markers on the right edge (when the minimap is collapsed or off), colored by severity — hover for the line, click to jump
+- **Unique problems**: groups repeated critical/error/problem lines by shape, orders them by severity
+  and first occurrence, and lets you jump to the first occurrence of each group
+- **Copy problem summary**: copies those groups with occurrence counts for a bug report or chat
+- **Ignore rules**: suppress expected phrases such as `Failures: 0` and `0 errors`. In a preset, use
+  `90,!Failures: 0` for a phrase or `91,!/flaky-\d+ error/i` for a pattern
+- **Partial log notice**: warns when a recognized CI log viewer shows only part of a log, with an
+  **Open full log** button when the page provides a full-log link
 
 ### Safe and Fast on Any Page
 
 - Uses the CSS Custom Highlight API: the page DOM is never modified, so React/Vue apps, code editors and contenteditable fields keep working
 - Skips text areas, inputs and editable regions
-- Time-sliced, cancellable search: a 50,000-line log is searched in ~0.2 s without freezing the page (v3.4.0 took ~2 minutes and froze the tab)
+- Time-sliced, cancellable search: a 50,000-line log (~90k matches) was fully searched in ~0.3–0.5 s
+  in local Chrome tests; timings and long tasks depend on the page and machine
+- Virtualized highlights: on big pages only matches near the viewport are registered with Chrome, so scrolling and page animations stay smooth
 
 ## Installation
 

@@ -14,35 +14,45 @@
     autoEnabled: 'autoSearchEnabled',
     options: 'rsearch_options',
     disabledHosts: 'rsearch_disabled_hosts',
-    defaultsVersion: 'rsearch_defaults_version'
+    defaultsVersion: 'rsearch_defaults_version',
+    ui: 'rsearch_ui'
   };
 
   const STORAGE_KEYS = Object.values(STORAGE);
 
-  // bump when DEFAULT_ROWS changes so untouched default presets get upgraded
-  const DEFAULTS_VERSION = 2;
+  // bump when DEFAULT_ROWS / DEFAULT_IGNORE change so untouched default presets get upgraded
+  const DEFAULTS_VERSION = 3;
 
-  // FNV-1a hashes of default preset CSVs shipped by earlier versions (3.4.0).
-  // a stored preset with one of these hashes was never edited by the user.
-  const LEGACY_DEFAULT_HASHES = ['9f112079'];
+  // FNV-1a hashes of default preset CSVs shipped by earlier versions
+  // (3.4.0, 3.5.0). a stored preset with one of these hashes was never
+  // edited by the user.
+  const LEGACY_DEFAULT_HASHES = ['9f112079', '919ce151'];
 
   const MAX_KEYWORDS = 500;
   const HOST_PERMISSION = { origins: ['<all_urls>'] };
   const DEFAULT_OPTIONS = { ignoreCase: true, smartMatch: true };
+  // minimap: 'expanded' | 'collapsed' | 'off'
+  const DEFAULT_UI = { minimap: 'expanded' };
 
   // ============================================================
-  // SEVERITY LEVELS (CLAUDE.md severity gradient, critical -> info)
+  // SEVERITY LEVELS
   // ============================================================
+  // colors come from the CLAUDE.md palette. levels are layered by visual
+  // weight, not just hue, so a busy log does not turn into a rainbow wall:
+  //   solid fill  -> critical, error   (must see)
+  //   tinted fill -> problem, custom   (should see)
+  //   underline   -> warning, notice   (may see)
+  // `style` mirrors the ::highlight rules in styles.css.
 
   const LEVELS = [
-    { id: 'critical', label: 'Critical', bg: '#DC2626', fg: '#FFFFFF' },
-    { id: 'error', label: 'Error', bg: '#EF4444', fg: '#0F172A' },
-    { id: 'problem', label: 'Problem', bg: '#F97316', fg: '#0F172A' },
-    { id: 'warning', label: 'Warning', bg: '#F59E0B', fg: '#0F172A' },
-    { id: 'notice', label: 'Notice', bg: '#EAB308', fg: '#0F172A' },
-    { id: 'lime', label: 'Other', bg: '#84CC16', fg: '#0F172A' },
-    { id: 'green', label: 'Other', bg: '#22C55E', fg: '#0F172A' },
-    { id: 'cyan', label: 'Other', bg: '#06B6D4', fg: '#0F172A' }
+    { id: 'critical', label: 'Critical', bg: '#DC2626', fg: '#FFFFFF', style: 'solid' },
+    { id: 'error', label: 'Error', bg: '#F97316', fg: '#0F172A', style: 'solid' },
+    { id: 'problem', label: 'Problem', bg: '#F59E0B', fg: '#0F172A', style: 'tint' },
+    { id: 'warning', label: 'Warning', bg: '#EAB308', fg: '#0F172A', style: 'wavy' },
+    { id: 'notice', label: 'Notice', bg: '#94A3B8', fg: '#0F172A', style: 'dotted' },
+    { id: 'custom-green', label: 'Other', bg: '#22C55E', fg: '#0F172A', style: 'tint' },
+    { id: 'custom-cyan', label: 'Other', bg: '#06B6D4', fg: '#0F172A', style: 'tint' },
+    { id: 'custom-pink', label: 'Other', bg: '#EC4899', fg: '#0F172A', style: 'tint' }
   ];
 
   // ============================================================
@@ -317,6 +327,24 @@
       'cublas_status_not_supported', 'cudnn_status_alloc_failed', 'cudnn_status_arch_mismatch']
   ];
 
+  // ignore rules ("ok" rules, as in Jenkins' Log Parser plugin): a keyword
+  // match overlapping one of these is not a problem. covers success summaries
+  // like "Failures: 0, Errors: 0", "412 passed, 0 failed", "0 Error(s)".
+  //   !phrase        literal, must stand alone (so "!0 errors" keeps "10 errors")
+  //   !/regex/flags  pattern
+  const DEFAULT_IGNORE = [
+    '!/\\b(?:errors?|failures?|failed|warnings?|exceptions?|crash(?:es)?)\\s*[:=]\\s*0(?![\\d.])/i',
+    '!/(?<![\\d.])0\\s+(?:errors?|failures?|failed|warnings?|error\\(s\\)|warning\\(s\\)|exceptions?|crash(?:es)?)(?![a-z])/i',
+    '!no errors',
+    '!no failures',
+    '!without errors',
+    '!continue-on-error',
+    '!fail-fast',
+    '!ignore_errors',
+    '!ignore-errors',
+    '!Warning: Permanently added'
+  ];
+
   // flatten rows, dropping case-insensitive duplicates (first wins)
   const DEFAULT_KEYWORDS = [];
   const BUILTIN_LEVELS = new Map();
@@ -346,9 +374,9 @@
     for (const [level, re] of LEVEL_HEURISTICS) {
       if (re.test(key)) return level;
     }
-    // unknown keyword: cycle through the calm end of the gradient so
-    // different custom keywords stay distinguishable
-    return 4 + ((index || 0) % 4);
+    // unknown keyword: cycle through the tinted custom colors so different
+    // custom keywords stay distinguishable without claiming a severity
+    return 5 + ((index || 0) % 3);
   }
 
   // ============================================================
@@ -361,7 +389,38 @@
     return lines.join('\n');
   }
 
-  const DEFAULT_PRESET_CSV = generatePresetCsv(DEFAULT_KEYWORDS);
+  const DEFAULT_PRESET_CSV = generatePresetCsv(DEFAULT_KEYWORDS.concat(DEFAULT_IGNORE));
+
+  function isIgnoreRule(keyword) {
+    return typeof keyword === 'string' && keyword.length > 1 && keyword[0] === '!';
+  }
+
+  // { keywords, ignores } counts for display
+  function countRules(keywords) {
+    let ignores = 0;
+    for (const k of keywords || []) if (isIgnoreRule(String(k).trim())) ignores++;
+    return { keywords: (keywords || []).length - ignores, ignores };
+  }
+
+  // compile one ignore rule; null when it is not valid
+  function compileIgnoreRule(rule, ignoreCase) {
+    const body = rule.slice(1);
+    if (!body) return null;
+    const asRegex = /^\/(.+)\/([a-z]*)$/.exec(body);
+    if (asRegex) {
+      try {
+        const flags = asRegex[2].replace(/[^imsu]/g, '');
+        return new RegExp(asRegex[1], Array.from(new Set(flags + 'g')).join(''));
+      } catch (e) {
+        return null;
+      }
+    }
+    const escaped = body.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+    const alnum = /[A-Za-z0-9]/;
+    const left = alnum.test(body[0]) ? '(?<![A-Za-z0-9])' : '';
+    const right = alnum.test(body[body.length - 1]) ? '(?![A-Za-z0-9])' : '';
+    return new RegExp(left + escaped + right, ignoreCase ? 'gi' : 'g');
+  }
 
   const COMMON_ERRORS_CSV = generatePresetCsv([
     'error', 'warning', 'info', 'debug', 'trace', 'fatal', 'critical', 'notice', 'alert', 'emerg'
@@ -427,6 +486,12 @@
   // SETTINGS
   // ============================================================
 
+  function normalizeUi(value) {
+    const ui = Object.assign({}, DEFAULT_UI, value && typeof value === 'object' ? value : {});
+    if (!['expanded', 'collapsed', 'off'].includes(ui.minimap)) ui.minimap = DEFAULT_UI.minimap;
+    return ui;
+  }
+
   function normalizeSettings(raw) {
     raw = raw || {};
     let presets = raw[STORAGE.presets];
@@ -455,6 +520,7 @@
       // auto-highlight is ON unless the user explicitly turned it off
       autoEnabled: raw[STORAGE.autoEnabled] !== false,
       options: Object.assign({}, DEFAULT_OPTIONS, storedOptions),
+      ui: normalizeUi(raw[STORAGE.ui]),
       disabledHosts: Array.isArray(raw[STORAGE.disabledHosts]) ? raw[STORAGE.disabledHosts] : []
     };
   }
@@ -600,10 +666,16 @@
     const smartMatch = !options || options.smartMatch !== false;
 
     const lookup = new Map();
+    const ignores = [];
     let levelIndex = 0;
     for (const raw of keywords || []) {
       const keyword = String(raw).trim();
       if (!keyword) continue;
+      if (isIgnoreRule(keyword)) {
+        const compiled = compileIgnoreRule(keyword, ignoreCase);
+        if (compiled) ignores.push(compiled);
+        continue;
+      }
       const key = ignoreCase ? keyword.toLowerCase() : keyword;
       if (lookup.has(key)) continue;
       const first = keyword.charCodeAt(0);
@@ -618,21 +690,53 @@
 
     if (lookup.size === 0) return null;
 
+
     const regex = new RegExp(buildTrieSource(Array.from(lookup.keys())), ignoreCase ? 'gi' : 'g');
+
+    // ignore intervals are computed once per text (only texts with candidates)
+    let ignoreText = null;
+    let ignoreSpans = [];
+    function ignoredSpans(text) {
+      if (text === ignoreText) return ignoreSpans;
+      ignoreText = text;
+      ignoreSpans = [];
+      for (const re of ignores) {
+        re.lastIndex = 0;
+        let m;
+        let guard = 0;
+        while ((m = re.exec(text)) !== null && guard++ < 10000) {
+          if (m[0].length === 0) {
+            re.lastIndex++;
+            continue;
+          }
+          ignoreSpans.push(m.index, m.index + m[0].length);
+        }
+      }
+      return ignoreSpans;
+    }
 
     return {
       kind: 'keywords',
       regex,
       global: true,
       size: lookup.size,
-      // returns { keyword, level } or null when the candidate fails smart boundaries
+      ignoreCount: ignores.length,
+      // returns { keyword, level } or null when the candidate fails smart
+      // boundaries or sits inside an ignored phrase
       resolve(text, start, end) {
         const matched = text.substring(start, end);
         const entry = lookup.get(ignoreCase ? matched.toLowerCase() : matched);
-        if (!entry) return { keyword: matched, level: 4 };
-        if (entry.guardLeft && !isBoundary(text, start)) return null;
-        if (entry.guardRight && !isBoundary(text, end)) return null;
-        return entry;
+        if (entry) {
+          if (entry.guardLeft && !isBoundary(text, start)) return null;
+          if (entry.guardRight && !isBoundary(text, end)) return null;
+        }
+        if (ignores.length) {
+          const spans = ignoredSpans(text);
+          for (let i = 0; i < spans.length; i += 2) {
+            if (start < spans[i + 1] && end > spans[i]) return null;
+          }
+        }
+        return entry || { keyword: matched, level: 5 };
       }
     };
   }
@@ -667,18 +771,23 @@
     MAX_KEYWORDS,
     HOST_PERMISSION,
     DEFAULT_OPTIONS,
+    DEFAULT_UI,
     LEVELS,
     DEFAULT_KEYWORDS,
     DEFAULT_PRESET_CSV,
     EMPTY_CSV,
     getDefaultPresets,
     generatePresetCsv,
+    DEFAULT_IGNORE,
+    isIgnoreRule,
+    countRules,
     parseCsvToKeywords,
     parseKeywordInput,
     isLegacyDefaultCsv,
     fnv1a,
     classifyKeyword,
     normalizeSettings,
+    normalizeUi,
     loadSettings,
     getActiveKeywords,
     hostFromUrl,

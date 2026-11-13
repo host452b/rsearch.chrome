@@ -230,15 +230,20 @@
 
     .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      height: 24px; padding: 0 8px;
+      display: inline-flex; align-items: stretch;
+      height: 24px;
       border: 1px solid var(--border);
       border-radius: var(--radius-chip);
       background: var(--bg-deep);
       font-size: 11px; color: var(--fg-soft);
+      overflow: hidden;
     }
-    .chip:hover { background: var(--surface-hover); color: var(--fg); }
+    .chip button { height: 100%; border: 0; border-radius: 0; background: transparent; font-size: 11px; color: inherit; }
+    .chip-main { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; }
+    .chip-eye { width: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--muted-fg); border-left: 1px solid var(--border) !important; }
+    .chip-main:hover, .chip-eye:hover { background: var(--surface-hover); color: var(--fg); }
     .chip b { font: 600 11px var(--mono); color: var(--fg); }
+    .chip.off .chip-main { opacity: 0.45; text-decoration: line-through; }
     .dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 
     .section-title {
@@ -267,6 +272,28 @@
     }
 
     .results-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+    .partial {
+      margin-top: 10px; padding: 8px 10px;
+      border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius);
+      background: rgba(245, 158, 11, 0.08);
+      font-size: 11.5px; color: var(--fg-soft);
+    }
+    .partial strong { color: #FCD34D; font-weight: 600; }
+    .partial button { margin-top: 6px; height: 26px; }
+
+    .patterns { display: flex; flex-direction: column; gap: 4px; }
+    .pattern {
+      display: flex; align-items: center; gap: 8px; width: 100%; height: auto;
+      padding: 5px 8px;
+      border: 1px solid transparent; border-radius: var(--radius);
+      background: transparent; text-align: left;
+    }
+    .pattern:hover { border-color: var(--border); background: var(--surface-hover); }
+    .pattern-count { min-width: 44px; font: 600 11px var(--mono); color: var(--fg); text-align: right; }
+    .pattern-text { flex: 1; min-width: 0; font: 11px var(--mono); color: var(--fg-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .link-btn { height: auto; padding: 4px 0 0; background: none; border: 0; color: var(--muted-fg); font-size: 11px; }
+    .link-btn:hover { color: var(--fg); }
 
     /* footer */
     .footer {
@@ -311,7 +338,7 @@
 
   <div id="editor" class="editor" hidden>
     <input type="text" id="presetName" placeholder="Preset name" aria-label="Preset name" />
-    <p class="hint">One keyword per line as <code>rank,keyword</code>. Max 500. With Smart match, keywords match at word or camelCase starts, and keywords of 5 letters or fewer must be whole words.</p>
+    <p class="hint">One keyword per line as <code>rank,keyword</code>. Max 500. With Smart match, keywords match at word or camelCase starts, and keywords of 5 letters or fewer must be whole words. Start a line with <code>!</code> to ignore a phrase (<code>90,!Failures: 0</code>) or <code>!/regex/i</code> for a pattern.</p>
     <textarea id="csvText" spellcheck="false" aria-label="Preset keywords CSV"></textarea>
     <div class="row">
       <button id="saveCsvBtn" class="btn-primary grow">Save</button>
@@ -327,6 +354,7 @@
     <label title="Match regardless of upper/lower case"><input type="checkbox" id="ignoreCase" checked />Ignore case</label>
     <label id="smartLabel" title="Skip matches inside other words (fault ≠ default, oom ≠ zoom); still matches TypeError, CUDA_ERROR"><input type="checkbox" id="smartMatch" checked />Smart match</label>
     <label id="findAllLabel" title="Highlight every match instead of only the first" hidden><input type="checkbox" id="findAll" checked />Find all</label>
+    <label title="Floating map of where matches sit on the page; click or drag it to scroll"><input type="checkbox" id="minimapToggle" checked />Minimap</label>
   </div>
 
   <div class="row">
@@ -347,7 +375,14 @@
       </div>
     </div>
     <div id="meta" class="meta"></div>
+    <div id="partialNotice" class="partial" hidden></div>
     <div id="chips" class="chips"></div>
+
+    <div id="patternsBlock" hidden>
+      <div class="section-title" id="patternsTitle">Unique problems</div>
+      <div id="patterns" class="patterns"></div>
+      <button id="patternsMore" class="link-btn" hidden></button>
+    </div>
 
     <div id="hotspotsBlock" hidden>
       <div class="section-title">Top hotspots</div>
@@ -355,7 +390,7 @@
     </div>
 
     <div class="results-actions">
-      <button id="copyBtn" class="btn-secondary grow" title="Copy the lines containing critical, error and problem matches">Copy error lines</button>
+      <button id="copyBtn" class="btn-secondary grow" title="Copy each unique critical / error / problem line with its count">Copy problem summary</button>
     </div>
   </div>
 

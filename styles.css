@@ -1,15 +1,21 @@
 /* RSearch page styles (injected with content.js).
    Matches are painted via the CSS Custom Highlight API, so no markup is
-   added to the page. Colors: CLAUDE.md severity gradient, critical -> info. */
+   added to the page. Severity is layered by visual weight (see LEVELS in
+   shared.js): solid fill > tinted fill > underline. Tints and underlines
+   keep the page's own text color, so they read on light and dark pages. */
 
-::highlight(rsearch-l0) { background-color: #DC2626; color: #FFFFFF; }
-::highlight(rsearch-l1) { background-color: #EF4444; color: #0F172A; }
-::highlight(rsearch-l2) { background-color: #F97316; color: #0F172A; }
-::highlight(rsearch-l3) { background-color: #F59E0B; color: #0F172A; }
-::highlight(rsearch-l4) { background-color: #EAB308; color: #0F172A; }
-::highlight(rsearch-l5) { background-color: #84CC16; color: #0F172A; }
-::highlight(rsearch-l6) { background-color: #22C55E; color: #0F172A; }
-::highlight(rsearch-l7) { background-color: #06B6D4; color: #0F172A; }
+/* solid: must see */
+::highlight(rsearch-l0) { background-color: #DC2626; color: #FFFFFF; }               /* critical */
+::highlight(rsearch-l1) { background-color: #F97316; color: #0F172A; }               /* error */
+/* tinted: should see */
+::highlight(rsearch-l2) { background-color: rgba(245, 158, 11, 0.32); }              /* problem */
+/* underline: may see */
+::highlight(rsearch-l3) { text-decoration: underline wavy #EAB308 1.5px; }           /* warning */
+::highlight(rsearch-l4) { text-decoration: underline dotted #94A3B8 1.5px; }         /* notice */
+/* custom keywords: distinguishable tints, no severity claimed */
+::highlight(rsearch-l5) { background-color: rgba(34, 197, 94, 0.30); }
+::highlight(rsearch-l6) { background-color: rgba(6, 182, 212, 0.30); }
+::highlight(rsearch-l7) { background-color: rgba(236, 72, 153, 0.30); }
 
 /* current match while navigating */
 ::highlight(rsearch-current) { background-color: #3B82F6; color: #FFFFFF; }

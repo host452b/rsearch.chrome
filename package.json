@@ -5,11 +5,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node tests/core.test.mjs",
+    "test:e2e": "node tests/e2e.mjs",
     "package": "node scripts/package-extension.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "clean": "rm -rf dist node_modules package-lock.json"
   },
   "devDependencies": {
+    "puppeteer-core": "^24.43.1",
     "sharp": "^0.33.2"
   },
   "repository": {

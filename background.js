@@ -128,7 +128,7 @@ function updateBadge(tabId, summary) {
   const worst = levels.findIndex(c => c > 0);
   const severe = worst >= 0 && worst <= 3;
   const background = severe ? Core.LEVELS[worst].bg : '#475569';
-  const foreground = (!severe || worst <= 1) ? '#FFFFFF' : '#0F172A';
+  const foreground = (!severe || worst === 0) ? '#FFFFFF' : '#0F172A';
 
   chrome.action.setBadgeText({ tabId, text: count > 0 ? Core.formatCount(count) : '' }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ tabId, color: background }).catch(() => {});

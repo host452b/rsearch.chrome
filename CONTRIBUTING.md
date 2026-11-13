@@ -72,6 +72,18 @@ function highlightElement(element) {
 
 ### Testing
 
+Run the core tests with `npm test` (Node only, no dependencies required). For the browser tests:
+
+```bash
+npm install
+npx @puppeteer/browsers install chrome@stable
+npm run test:e2e
+```
+
+The E2E suite uses Chrome for Testing, a temporary profile, and local fixture pages. It prints the
+temporary artifact directory containing screenshots. Set `CHROME_PATH` to use an existing Chrome
+for Testing binary. It tests both granted host access and the real manifest without host access.
+
 Before submitting:
 1. Test on **multiple websites**
 2. Test **both search modes** (regex and keywords)

@@ -22,6 +22,7 @@ const ui = {
   smartMatch: $('smartMatch'),
   smartLabel: $('smartLabel'),
   findAll: $('findAll'),
+  minimapToggle: $('minimapToggle'),
   findAllLabel: $('findAllLabel'),
   searchBtn: $('searchBtn'),
   clearBtn: $('clearBtn'),
@@ -34,6 +35,11 @@ const ui = {
   prevBtn: $('prevBtn'),
   nextBtn: $('nextBtn'),
   hotspotsBlock: $('hotspotsBlock'),
+  partialNotice: $('partialNotice'),
+  patternsBlock: $('patternsBlock'),
+  patternsTitle: $('patternsTitle'),
+  patterns: $('patterns'),
+  patternsMore: $('patternsMore'),
   hotspots: $('hotspots'),
   copyBtn: $('copyBtn'),
   footer: $('footer'),
@@ -81,6 +87,49 @@ function fmt(n) {
   return Number(n || 0).toLocaleString('en-US');
 }
 
+// dot that mirrors how a level is painted on the page (solid / tint / underline)
+function levelDot(level) {
+  const meta = Core.LEVELS[level];
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  if (meta.style === 'solid') {
+    dot.style.background = meta.bg;
+  } else if (meta.style === 'tint') {
+    const n = parseInt(meta.bg.slice(1), 16);
+    dot.style.background = `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.35)`;
+    dot.style.boxShadow = `inset 0 0 0 1px ${meta.bg}`;
+  } else {
+    dot.style.borderRadius = '0';
+    dot.style.height = '6px';
+    dot.style.borderBottom = `2px ${meta.style === 'dotted' ? 'dotted' : 'solid'} ${meta.bg}`;
+  }
+  return dot;
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function eyeIcon(open) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '1.5');
+  const eye = document.createElementNS(SVG_NS, 'path');
+  eye.setAttribute('d', 'M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8s-2.4 4.5-6.5 4.5S1.5 8 1.5 8z');
+  const pupil = document.createElementNS(SVG_NS, 'circle');
+  pupil.setAttribute('cx', '8');
+  pupil.setAttribute('cy', '8');
+  pupil.setAttribute('r', '2');
+  svg.append(eye, pupil);
+  if (!open) {
+    const slash = document.createElementNS(SVG_NS, 'path');
+    slash.setAttribute('d', 'M2.5 13.5l11-11');
+    svg.append(slash);
+  }
+  return svg;
+}
+
 // ============================================================
 // SETTINGS
 // ============================================================
@@ -102,8 +151,9 @@ function renderPresetSelect() {
   settings.presets.forEach((preset, index) => {
     const option = document.createElement('option');
     option.value = String(index);
-    const count = Core.parseCsvToKeywords(preset.csv).length;
-    option.textContent = preset.name + ' · ' + count + (count === 1 ? ' keyword' : ' keywords');
+    const counts = Core.countRules(Core.parseCsvToKeywords(preset.csv));
+    option.textContent = preset.name + ' · ' + counts.keywords + (counts.keywords === 1 ? ' keyword' : ' keywords') +
+      (counts.ignores ? ' · ' + counts.ignores + ' ignored' : '');
     ui.presetSelect.appendChild(option);
   });
   ui.presetSelect.value = String(settings.activePresetIndex);
@@ -178,6 +228,7 @@ const CHIP_GROUPS = [
 function renderResults(summary) {
   if (!summary || !summary.active) {
     ui.results.hidden = true;
+    lastPatternsAt = 0;
     return;
   }
   ui.results.hidden = false;
@@ -191,29 +242,44 @@ function renderResults(summary) {
   if (summary.running) meta.push('scanning…');
   ui.meta.textContent = meta.join(' · ');
 
+  renderPartial(summary.partial);
+  requestPatterns(false);
+
   ui.navPos.textContent = (summary.cursor >= 0 ? fmt(summary.cursor + 1) : '–') + ' / ' + fmt(summary.visibleCount);
   ui.prevBtn.disabled = summary.visibleCount === 0;
   ui.nextBtn.disabled = summary.visibleCount === 0;
   ui.copyBtn.disabled = summary.visibleCount === 0;
 
-  // severity chips: click jumps to the next match of that severity
+  // severity chips: click jumps to the next match of that severity,
+  // the eye shows / hides that layer on the page
   ui.chips.textContent = '';
   const levels = summary.levels || [];
+  const hiddenLayers = new Set(summary.hiddenLevels || []);
   for (const group of CHIP_GROUPS) {
-    const count = group.level === 'other'
-      ? levels.slice(4).reduce((a, b) => a + b, 0)
-      : (levels[group.level] || 0);
+    const groupLevels = group.level === 'other' ? [4, 5, 6, 7] : [group.level];
+    const count = groupLevels.reduce((a, l) => a + (levels[l] || 0), 0);
     if (count === 0) continue;
-    const chip = document.createElement('button');
-    chip.className = 'chip';
-    chip.title = 'Jump to next ' + group.label.toLowerCase() + ' match';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = Core.LEVELS[group.level === 'other' ? 4 : group.level].bg;
+    const off = groupLevels.every(l => hiddenLayers.has(l));
+    const firstLevel = groupLevels.find(l => (levels[l] || 0) > 0);
+
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (off ? ' off' : '');
+    const main = document.createElement('button');
+    main.className = 'chip-main';
+    main.title = off ? 'Hidden on the page. Click to show and jump to the next match' : 'Jump to next ' + group.label.toLowerCase() + ' match';
     const num = document.createElement('b');
     num.textContent = fmt(count);
-    chip.append(dot, num, document.createTextNode(group.label));
-    chip.addEventListener('click', () => navigate(1, group.level));
+    main.append(levelDot(firstLevel), num, document.createTextNode(group.label));
+    main.addEventListener('click', () => navigate(1, group.level));
+
+    const eye = document.createElement('button');
+    eye.className = 'chip-eye';
+    eye.title = off ? 'Show ' + group.label.toLowerCase() + ' on the page' : 'Hide ' + group.label.toLowerCase() + ' on the page';
+    eye.setAttribute('aria-label', eye.title);
+    eye.append(eyeIcon(!off));
+    eye.addEventListener('click', () => toggleLayer(group.level, off));
+
+    chip.append(main, eye);
     ui.chips.appendChild(chip);
   }
 
@@ -230,9 +296,7 @@ function renderResults(summary) {
     const rank = document.createElement('span');
     rank.className = 'hotspot-rank';
     rank.textContent = '#' + spot.rank;
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = Core.LEVELS[spot.level].bg;
+    const dot = levelDot(spot.level);
     const info = document.createElement('span');
     info.textContent = spot.position + ' down · ' + fmt(spot.count) + (spot.count === 1 ? ' match' : ' matches');
     top.append(rank, dot, info);
@@ -339,6 +403,7 @@ async function runSearch() {
     }
     if (response.success) {
       renderResults(response);
+      requestPatterns(true);
       if (response.count === 0) {
         showStatus('No matches on this page.', 'info');
       } else {
@@ -385,16 +450,102 @@ async function navigate(direction, level) {
   }
 }
 
+// CI pages that show only the tail of a long log
+function renderPartial(partial) {
+  ui.partialNotice.textContent = '';
+  ui.partialNotice.hidden = !partial;
+  if (!partial) return;
+  const title = document.createElement('strong');
+  title.textContent = 'Partial log. ';
+  const where = partial.source ? partial.source + ' shows only part of this log' : 'This page shows only part of the log';
+  ui.partialNotice.append(title, document.createTextNode(where + ': earlier errors, often the root cause, are not on the page.'));
+  if (partial.href) {
+    const open = document.createElement('button');
+    open.className = 'btn-secondary';
+    open.textContent = 'Open full log';
+    open.addEventListener('click', () => chrome.tabs.create({ url: partial.href, index: tab.index + 1 }));
+    ui.partialNotice.append(document.createElement('br'), open);
+  } else {
+    ui.partialNotice.append(' Download the full log from the page menu.');
+  }
+}
+
+// unique problems: grouped by shape, most severe and earliest first
+let lastPatternsAt = 0;
+let patternsExpanded = false;
+let patternsPending = false;
+
+async function requestPatterns(force) {
+  const now = Date.now();
+  if (patternsPending || (!force && now - lastPatternsAt < 3000)) return;
+  patternsPending = true;
+  lastPatternsAt = now;
+  try {
+    const response = await sendToTab({ action: 'patterns', maxLevel: 2, limit: 30 });
+    renderPatterns(response);
+  } catch (error) {
+    ui.patternsBlock.hidden = true;
+  } finally {
+    patternsPending = false;
+  }
+}
+
+function renderPatterns(response) {
+  const list = (response && response.patterns) || [];
+  ui.patterns.textContent = '';
+  ui.patternsBlock.hidden = list.length === 0;
+  if (list.length === 0) return;
+  const total = response.total || list.length;
+  ui.patternsTitle.textContent = 'Unique problems · ' + fmt(total);
+  const shown = patternsExpanded ? list : list.slice(0, 5);
+  for (const p of shown) {
+    const item = document.createElement('button');
+    item.className = 'pattern';
+    item.title = 'Jump to the first occurrence (' + p.position + ' down)\n' + p.sample;
+    const count = document.createElement('span');
+    count.className = 'pattern-count';
+    count.textContent = Core.formatCount(p.count) + '\u00d7';
+    const text = document.createElement('span');
+    text.className = 'pattern-text';
+    text.textContent = p.sample;
+    item.append(levelDot(p.level), count, text);
+    item.addEventListener('click', () => sendToTab({ action: 'jumpToPattern', index: p.index }).then(renderResults).catch(() => {}));
+    ui.patterns.appendChild(item);
+  }
+  const hiddenCount = Math.min(total, list.length) - shown.length;
+  ui.patternsMore.hidden = !patternsExpanded && hiddenCount <= 0;
+  ui.patternsMore.textContent = patternsExpanded ? 'Show fewer' : 'Show ' + hiddenCount + ' more';
+}
+
+ui.patternsMore.addEventListener('click', () => {
+  patternsExpanded = !patternsExpanded;
+  requestPatterns(true);
+});
+
+async function toggleLayer(level, visible) {
+  try {
+    renderResults(await sendToTab({ action: 'toggleLayer', level, visible }));
+  } catch (error) {
+    showStatus(friendlyError(error), 'error');
+  }
+}
+
 async function copyErrorLines() {
   try {
-    const response = await sendToTab({ action: 'collectLines', maxLevel: 2, limit: 500 });
-    const lines = (response && response.lines) || [];
-    if (lines.length === 0) {
-      showStatus('Nothing to copy.', 'info');
+    const response = await sendToTab({ action: 'patterns', maxLevel: 2, limit: 200 });
+    const list = (response && response.patterns) || [];
+    if (list.length === 0) {
+      showStatus('No critical, error or problem lines to copy.', 'info');
       return;
     }
+    const total = response.total || list.length;
+    const lines = ['RSearch \u00b7 ' + total + ' unique problem' + (total === 1 ? '' : 's') + ' \u00b7 ' + tab.url];
+    for (const p of list) {
+      lines.push('[' + Core.LEVELS[p.level].id + '] ' + p.count + '\u00d7  ' + p.sample);
+    }
+    if (total > list.length) lines.push('\u2026 ' + (total - list.length) + ' more');
     await navigator.clipboard.writeText(lines.join('\n'));
-    showStatus('Copied ' + fmt(lines.length) + (lines.length === 1 ? ' line' : ' lines') + ' to the clipboard.', 'success');
+    showStatus('Copied ' + fmt(list.length) + ' unique problem' + (list.length === 1 ? '' : 's') + ' to the clipboard.', 'success');
   } catch (error) {
     showStatus('Copy failed: ' + friendlyError(error), 'error');
   }
@@ -521,6 +672,10 @@ async function onOptionChange() {
 ui.ignoreCase.addEventListener('change', onOptionChange);
 ui.smartMatch.addEventListener('change', onOptionChange);
 ui.findAll.addEventListener('change', () => { if (!ui.results.hidden && ui.regexMode.checked) runSearch(); });
+ui.minimapToggle.addEventListener('change', async () => {
+  settings.ui = Object.assign({}, settings.ui, { minimap: ui.minimapToggle.checked ? 'expanded' : 'off' });
+  await saveSettings({ [Core.STORAGE.ui]: settings.ui });
+});
 
 ui.searchBtn.addEventListener('click', runSearch);
 ui.clearBtn.addEventListener('click', () => clearPage(false));
@@ -588,6 +743,7 @@ async function init() {
 
   ui.ignoreCase.checked = settings.options.ignoreCase;
   ui.smartMatch.checked = settings.options.smartMatch;
+  ui.minimapToggle.checked = settings.ui.minimap !== 'off';
   renderPresetSelect();
   renderModeUI();
   renderAccessUI();

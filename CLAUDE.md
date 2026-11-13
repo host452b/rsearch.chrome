@@ -40,6 +40,24 @@ Severity gradient (8 steps, critical → info):
 - Window chrome: 3-dot traffic lights (red/amber/green), monospace title centered
 - Highlight chips: keyword background at 0.2 opacity with 3px rounded rect
 
+### In-Page Highlights & Minimap
+
+- Severity is layered by visual weight (`LEVELS[].style` in `shared.js` must match `styles.css`):
+  solid fill = critical `#DC2626` / error `#F97316`; tint = problem `#F59E0B`; wavy underline =
+  warning `#EAB308`; dotted underline = notice `#94A3B8`; custom keywords = green / cyan / pink tints
+- Current match: solid `#3B82F6` with white text
+- On-page UI (minimap) lives in a closed shadow root styled with constructable stylesheets — never
+  inline `<style>`/`innerHTML` (page CSP / Trusted Types)
+- Exception to "dark mode only": the minimap is a white, clean surface (user request 2026-11-13);
+  map shades: `#DC2626 #EA580C #D97706 #CA8A04 #94A3B8` + custom `#16A34A #0891B2 #DB2777`
+
+## Performance Rules
+
+- Chrome rebuilds markers for every registered highlight range on any DOM/style change: keep
+  registered ranges ≲ 3,000 (`VIRTUAL_THRESHOLD`, viewport-based registration in `content.js`)
+- No long main-thread tasks: anything proportional to page size runs in ~12 ms slices
+- Never re-measure all matches on live updates unless anchors moved or the viewport resized
+
 ### Typography
 
 - UI text: `-apple-system, BlinkMacSystemFont, sans-serif`
