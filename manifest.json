@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RSearch - Error Log Search & Highlighter",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "Error log highlighter: 450+ error patterns, severity colors, regex search and always-on auto-highlight.",
   "author": "clemente0731",
   "minimum_chrome_version": "105",

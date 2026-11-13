@@ -1,6 +1,6 @@
-# Chrome Web Store 发布资料 — RSearch v3.4.0
+# Chrome Web Store 发布资料 — RSearch v3.5.0
 
-> 生成日期：2026-04-17
+> 生成日期：2026-11-13
 > 此文件包含 Dashboard 所有需要填写的字段，发布时逐项复制粘贴。
 
 ---
@@ -12,66 +12,58 @@ RSearch - Error Log Search & Highlighter
 
 
 ### 软件包中的摘要
-Advanced search with regex, 363+ error keywords, auto-highlight, and Top 3 density areas. Perfect for developers debugging logs.
+Error log highlighter: 450+ error patterns, severity colors, regex search and always-on auto-highlight.
 
 
 ### 说明（最长 16,000 字符）
-RSearch - Advanced Text Search & Error Log Analysis
+RSearch - Error Log Search & Highlighter
 
-FEATURES:
+Open a CI log, a crash dump or a server log and the problems are already highlighted: crashes in red, errors, problems and warnings in their own colors, with a match count on the toolbar badge.
 
-Keywords Mode
-- 363+ pre-configured error keywords
-- CSV-based preset system (3 slots, 500 keywords each)
-- Severity-based color coding (8 colors: magenta to green)
-- Auto-highlights errors, warnings, exceptions
+ALWAYS-ON AUTO-HIGHLIGHT (on by default)
+- Every page you open is highlighted with the active preset
+- One click "Allow" grants access to all sites; decline and it runs whenever you open RSearch
+- Pause it per site, or turn it off with the Auto switch
+- Streaming logs and dynamically loaded content are highlighted as they appear
+- Match count on the toolbar badge, colored by the worst severity found
 
-Regex Mode
-- Full regular expression support
-- Case-sensitive/insensitive options
-- Advanced pattern matching
+450+ ERROR KEYWORDS
+- Signals and crashes: SIGSEGV, SIGABRT, core dumped, panicked, OOMKilled
+- Python, C/C++ compiler and linker, Go, Rust, Java, Node/npm
+- CUDA, cuBLAS, cuDNN, NCCL, TensorRT, NVIDIA driver (Xid, NVRM)
+- PyTorch, ONNX, ONNXRuntime, vLLM, SGLang
+- Kubernetes and containers: CrashLoopBackOff, ImagePullBackOff, Evicted
+- Sanitizers: heap-use-after-free, data race, double free
+- Smart match: "error" finds TypeError and CUDA_ERROR, but "fault" never lights up "default"
 
-Top 3 Density Areas
-- Sliding window algorithm detects error hotspots
-- Click to navigate directly to high-density areas
-- Temporary highlight on target element
+FIND THE REAL PROBLEM FAST
+- Severity colors: Critical, Error, Problem, Warning
+- Click a severity to jump to its next match
+- Previous / next match navigation (also inside scrollable log panes)
+- Top 3 hotspots: the densest, most severe regions of the page
+- Scrollbar markers colored by severity, hover to preview a line
+- Copy error lines: grab the failing lines for a bug report
 
-Auto-Search
-- Toggle switch for automatic searching
-- Auto-executes on new page loads
-- Auto-executes when switching tabs
-- State persists across sessions
+FAST AND SAFE
+- A 50,000-line log is searched in about 0.2 seconds without freezing the page
+- Highlights never modify the page, so web apps and editors keep working
+- Text boxes and editable areas are skipped
 
-Preset Management
-- 3 customizable preset slots
-- Import/export via CSV editor
-- Default preset covers common errors:
-  System signals (SIGSEGV, SIGABRT)
-  Python errors (RuntimeError, ValueError)
-  CUDA/GPU errors
-  Compiler errors
-  And 350+ more patterns
+REGEX MODE AND PRESETS
+- Full regular expressions with ignore-case and find-all options
+- 3 CSV preset slots, up to 500 keywords each
 
-PERFECT FOR:
-- Developers debugging logs
-- QA engineers analyzing reports
-- DevOps monitoring systems
-- Anyone searching text patterns
-
-PRIVACY:
-- No data collection
-- No external requests
-- Fully local processing
+PRIVACY
+- No data collection, no network requests, no analytics
+- All processing happens locally in your browser
 - Open source on GitHub
 
-HOW TO USE:
-1. Click RSearch icon
-2. Turn ON the switch (green) for auto-search
-3. Or click "Search" for manual search
-4. Click Top 3 areas to navigate
-5. Click "Clear" to remove highlights
-
-TIP: Edit presets to add your own keywords!
+HOW TO USE
+1. Click the RSearch icon and click "Allow" for automatic highlighting
+2. Open any log page: matches are highlighted and counted on the badge
+3. Open RSearch to see severity counts and hotspots, and step through matches
+4. Type keywords or switch to Regex for one-off searches
+5. Click "Clear" to remove highlights on the current page
 
 Open source: https://github.com/host452b/rsearch
 
@@ -134,7 +126,7 @@ https://github.com/host452b/rsearch/issues
 
 ### 单一用途说明（最长 1,000 字符）
 
-This extension searches and highlights text patterns (regex or keywords) on web pages, with 363+ built-in error patterns for log analysis. All search and highlighting operations happen locally in the browser. No data is collected, stored externally, or transmitted to any server.
+This extension searches and highlights error keywords and regex patterns on web pages, with 450+ built-in error patterns for log analysis. All search and highlighting operations happen locally in the browser. No data is collected, stored externally, or transmitted to any server.
 
 
 ### 需请求权限的理由
@@ -153,6 +145,10 @@ Required to save user's custom keyword presets (up to 3 preset slots with 500 ke
 
 **需请求 tabs 的理由：**
 Required for the auto-search feature to detect when users switch tabs or load new pages, enabling automatic keyword highlighting on the newly active tab. Only reads the tab URL to determine if search should run. Tab information is used locally and never transmitted.
+
+
+**需请求主机权限（optional_host_permissions: <all_urls>）的理由：**
+Optional, requested at runtime only when the user enables "auto-highlight every page" in the popup. With it, RSearch runs its bundled search script on each page the user opens so error keywords are highlighted without clicking the icon. Page text is scanned locally in memory; nothing is stored, extracted or transmitted. Users can decline (the extension then works on click via activeTab), pause it per site, or revoke it at any time.
 
 
 ### 远程代码
